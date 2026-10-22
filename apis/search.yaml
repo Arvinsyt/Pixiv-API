@@ -1,0 +1,895 @@
+# 搜索与标签接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Search
+  version: 1.0.0
+  description: |
+    搜索相关接口（插画/小说/用户搜索、搜索联想、热门预览、趋势标签），
+
+    认证方式与公共请求头约定见 `_shared.yaml` 顶部说明。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: search
+    description: 搜索（插画/小说/用户、联想词、热门预览）
+  - name: trending-tags
+    description: 趋势标签
+paths:
+  /v1/search/illust:
+    get:
+      operationId: getSearchIllust
+      summary: 搜索插画
+      description: |
+        固定携带 `merge_plain_keyword_results=true`；filter 在 Android 上为 for_android、
+        其他平台为 for_ios。支持日期区间、收藏数区间、AI 类型、工具、
+        画幅比例与宽高区间等过滤。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android, for_ios]
+        - name: merge_plain_keyword_results
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+          description: 固定 true；合并"标签搜索"与"纯关键词搜索"结果
+        - name: include_translated_tag_results
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: 是否合并标签译名匹配的结果（部分客户端固定携带 true）
+        - name: search_target
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [partial_match_for_tags, exact_match_for_tags, title_and_caption]
+            default: partial_match_for_tags
+          description: 搜索范围
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [date_desc, date_asc, popular_desc, popular_male_desc, popular_female_desc]
+            default: date_desc
+          description: 排序（popular_* 需要付费会员）
+        - name: start_date
+          in: query
+          required: false
+          description: 起始日期，格式 YYYY-M-D
+          schema:
+            type: string
+          example: "2026-1-1"
+        - name: end_date
+          in: query
+          required: false
+          description: 结束日期，格式 YYYY-M-D
+          schema:
+            type: string
+          example: "2026-10-21"
+        - name: bookmark_num_min
+          in: query
+          required: false
+          description: 最小收藏数
+          schema:
+            type: integer
+        - name: bookmark_num_max
+          in: query
+          required: false
+          description: 最大收藏数
+          schema:
+            type: integer
+        - name: search_ai_type
+          in: query
+          required: false
+          description: AI 生成类型过滤（0 不限；1 非AI生成；2 AI生成）
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+        - name: tool
+          in: query
+          required: false
+          description: 按创作工具过滤（候选值见 GET /v1/search/options 的 illust.tool）
+          schema:
+            type: string
+        - name: lang
+          in: query
+          required: false
+          description: 按作品语言过滤
+          schema:
+            type: string
+        - name: ratio_pattern
+          in: query
+          required: false
+          description: 画幅比例过滤
+          schema:
+            type: string
+        - name: content_type
+          in: query
+          required: false
+          description: 作品类型过滤（在插画搜索结果中限定漫画）
+          schema:
+            type: string
+            enum: [illust, manga]
+        - name: width_min
+          in: query
+          required: false
+          description: 最小宽度（像素）
+          schema:
+            type: integer
+        - name: width_max
+          in: query
+          required: false
+          description: 最大宽度（像素）
+          schema:
+            type: integer
+        - name: height_min
+          in: query
+          required: false
+          description: 最小高度（像素）
+          schema:
+            type: integer
+        - name: height_max
+          in: query
+          required: false
+          description: 最大高度（像素）
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 搜索结果
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/search/popular-preview/illust:
+    get:
+      operationId: getPopularPreview
+      summary: 热门插画预览
+      description: |
+        返回某关键词的热门作品（少量），
+        用于搜索页顶部预览。请求固定携带
+        `filter=for_android&include_translated_tag_results=true&merge_plain_keyword_results=true`
+        与 `search_target=partial_match_for_tags`。
+        另接受与 `GET /v1/search/illust` 相同的过滤参数（日期、收藏数、
+        工具、画幅、宽高区间等），均为可选。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - name: include_translated_tag_results
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: merge_plain_keyword_results
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: search_target
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [partial_match_for_tags]
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 排序（可选；部分客户端在预览场景仍携带）
+        - name: start_date
+          in: query
+          required: false
+          description: 起始日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: end_date
+          in: query
+          required: false
+          description: 结束日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: bookmark_num_min
+          in: query
+          required: false
+          description: 最小收藏数
+          schema:
+            type: integer
+        - name: bookmark_num_max
+          in: query
+          required: false
+          description: 最大收藏数
+          schema:
+            type: integer
+        - name: search_ai_type
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+        - name: tool
+          in: query
+          required: false
+          description: 按创作工具过滤
+          schema:
+            type: string
+        - name: lang
+          in: query
+          required: false
+          description: 按作品语言过滤
+          schema:
+            type: string
+        - name: ratio_pattern
+          in: query
+          required: false
+          description: 画幅比例过滤
+          schema:
+            type: string
+        - name: content_type
+          in: query
+          required: false
+          description: 作品类型过滤
+          schema:
+            type: string
+            enum: [illust, manga]
+        - name: width_min
+          in: query
+          required: false
+          description: 最小宽度（像素）
+          schema:
+            type: integer
+        - name: width_max
+          in: query
+          required: false
+          description: 最大宽度（像素）
+          schema:
+            type: integer
+        - name: height_min
+          in: query
+          required: false
+          description: 最小高度（像素）
+          schema:
+            type: integer
+        - name: height_max
+          in: query
+          required: false
+          description: 最大高度（像素）
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 热门预览结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+                  - type: object
+                    properties:
+                      illust_modes:
+                        type: array
+                        description: 各过滤模式（全部/AI 等）的搜索模式列表
+                        items:
+                          type: object
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/search/popular-preview/novel:
+    get:
+      operationId: getPopularPreviewNovel
+      summary: 热门小说预览
+      description: |
+        返回某关键词的热门小说（少量），
+        用于搜索页顶部预览。请求固定携带
+        `include_translated_tag_results=true&merge_plain_keyword_results=true`
+        与 `search_target=partial_match_for_tags`（与插画版一致）。
+        另接受与 `GET /v1/search/novel` 相同的过滤参数
+        （日期、收藏数、题材、字数/单词数/阅读用时区间等），均为可选。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_android, for_ios]
+          description: 客户端平台过滤标记；部分实现不传亦可
+        - name: include_translated_tag_results
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: merge_plain_keyword_results
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: search_target
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [partial_match_for_tags]
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 排序（可选；部分客户端在预览场景仍携带）
+        - name: start_date
+          in: query
+          required: false
+          description: 起始日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: end_date
+          in: query
+          required: false
+          description: 结束日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: bookmark_num_min
+          in: query
+          required: false
+          description: 最小收藏数
+          schema:
+            type: integer
+        - name: bookmark_num_max
+          in: query
+          required: false
+          description: 最大收藏数
+          schema:
+            type: integer
+        - name: search_ai_type
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+        - name: genre
+          in: query
+          required: false
+          description: 小说题材 ID（候选值见 GET /v1/search/options 的 novel.genre）
+          schema:
+            type: integer
+        - name: lang
+          in: query
+          required: false
+          description: 按作品语言过滤
+          schema:
+            type: string
+        - name: is_original_only
+          in: query
+          required: false
+          description: 仅显示原创小说
+          schema:
+            type: boolean
+        - name: is_replaceable_only
+          in: query
+          required: false
+          description: 仅显示可翻译（AI 译制）的小说
+          schema:
+            type: boolean
+        - name: text_length_min
+          in: query
+          required: false
+          description: 正文字数下限（以 3 个字符为一单位）
+          schema:
+            type: integer
+        - name: text_length_max
+          in: query
+          required: false
+          description: 正文字数上限（以 3 个字符为一单位）
+          schema:
+            type: integer
+        - name: word_count_min
+          in: query
+          required: false
+          description: 单词数下限
+          schema:
+            type: integer
+        - name: word_count_max
+          in: query
+          required: false
+          description: 单词数上限
+          schema:
+            type: integer
+        - name: reading_time_min
+          in: query
+          required: false
+          description: 阅读用时下限（分钟）
+          schema:
+            type: integer
+        - name: reading_time_max
+          in: query
+          required: false
+          description: 阅读用时上限（分钟）
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 热门预览结果
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/search/novel:
+    get:
+      operationId: getSearchNovel
+      summary: 搜索小说
+      description: |
+        固定携带 `filter=for_android` 与 `merge_plain_keyword_results=true`。
+        支持题材、原创/翻译限定与正文长度三组区间过滤
+        （字数/单词数/阅读用时，正文长度以 3 个字符为一单位）。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - name: merge_plain_keyword_results
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: include_translated_tag_results
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: 是否合并标签译名匹配的结果（部分客户端固定携带 true）
+        - name: search_target
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [partial_match_for_tags, exact_match_for_tags, text, keyword]
+            default: partial_match_for_tags
+          description: 搜索范围（text=正文，keyword=标签+正文）
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [date_desc, date_asc, popular_desc]
+            default: date_desc
+        - name: start_date
+          in: query
+          required: false
+          description: 起始日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: end_date
+          in: query
+          required: false
+          description: 结束日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: bookmark_num
+          in: query
+          required: false
+          deprecated: true
+          description: 最小收藏数（旧客户端仍发送此参数，但新接口应使用 bookmark_num_min/max）
+          schema:
+            type: integer
+        - name: bookmark_num_min
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: bookmark_num_max
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: search_ai_type
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+        - name: genre
+          in: query
+          required: false
+          description: 小说题材 ID（候选值见 GET /v1/search/options 的 novel.genre）
+          schema:
+            type: integer
+        - name: lang
+          in: query
+          required: false
+          description: 按作品语言过滤
+          schema:
+            type: string
+        - name: is_original_only
+          in: query
+          required: false
+          description: 仅显示原创小说
+          schema:
+            type: boolean
+        - name: is_replaceable_only
+          in: query
+          required: false
+          description: 仅显示可翻译（AI 译制）的小说
+          schema:
+            type: boolean
+        - name: text_length_min
+          in: query
+          required: false
+          description: 正文字数下限（以 3 个字符为一单位）
+          schema:
+            type: integer
+        - name: text_length_max
+          in: query
+          required: false
+          description: 正文字数上限（以 3 个字符为一单位）
+          schema:
+            type: integer
+        - name: word_count_min
+          in: query
+          required: false
+          description: 单词数下限
+          schema:
+            type: integer
+        - name: word_count_max
+          in: query
+          required: false
+          description: 单词数上限
+          schema:
+            type: integer
+        - name: reading_time_min
+          in: query
+          required: false
+          description: 阅读用时下限（分钟）
+          schema:
+            type: integer
+        - name: reading_time_max
+          in: query
+          required: false
+          description: 阅读用时上限（分钟）
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 搜索结果
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/search/bookmark-ranges/illust:
+    get:
+      operationId: getIllustBookmarkRanges
+      summary: 插画搜索的收藏数分段
+      description: |
+        返回某关键词搜索结果按收藏数的分段统计，
+        用于搜索页的收藏数区间过滤（bookmark_num_min/max 取值来源）。
+        请求固定携带 `search_target=partial_match_for_tags`。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: search_target
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [partial_match_for_tags, exact_match_for_tags, title_and_caption]
+            default: partial_match_for_tags
+        - name: start_date
+          in: query
+          required: false
+          description: 起始日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: end_date
+          in: query
+          required: false
+          description: 结束日期，格式 YYYY-M-D
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 收藏数分段列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/BookmarkRangesResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/search/bookmark-ranges/novel:
+    get:
+      operationId: getNovelBookmarkRanges
+      summary: 小说搜索的收藏数分段
+      description: |
+        同插画版 bookmark-ranges，用于小说搜索页的收藏数区间过滤。
+        请求固定携带 `search_target=partial_match_for_tags`。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: search_target
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [partial_match_for_tags, exact_match_for_tags, text, keyword]
+            default: partial_match_for_tags
+        - name: start_date
+          in: query
+          required: false
+          description: 起始日期，格式 YYYY-M-D
+          schema:
+            type: string
+        - name: end_date
+          in: query
+          required: false
+          description: 结束日期，格式 YYYY-M-D
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 收藏数分段列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/BookmarkRangesResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/search/user:
+    get:
+      operationId: getSearchUser
+      summary: 搜索用户
+      description: 请求时固定携带 `filter=for_android`。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 用户搜索结果
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/UserPreviewsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v2/search/autocomplete:
+    get:
+      operationId: getSearchAutocomplete
+      summary: 搜索联想词
+      description: |
+        固定携带 `merge_plain_keyword_results=true`。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: merge_plain_keyword_results
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+      responses:
+        '200':
+          description: 联想词列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/AutoWords'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/search/options:
+    get:
+      operationId: getSearchOptions
+      summary: 搜索筛选选项（动态候选）
+      description: |
+        返回当前账号可用的搜索筛选候选：收藏数区间、AI 类型开关、
+        创作工具（illust）、题材（novel）与作品语言列表，
+        供搜索页筛选面板动态渲染（tool/genre/lang 等的取值来源）。
+      tags: [search]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/Word'
+        - name: search_target
+          in: query
+          required: false
+          schema:
+            type: string
+            default: partial_match_for_tags
+        - name: merge_plain_keyword_results
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: include_translated_tag_results
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: search_ai_type
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1, 2]
+      responses:
+        '200':
+          description: 搜索筛选选项
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/SearchOptionsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/trending-tags/illust:
+    get:
+      operationId: getIllustTrendTags
+      summary: 插画趋势标签
+      description: |
+        请求时固定携带 `filter=for_android`。
+        返回当前热门标签及每个标签的代表作品，用于搜索页的"大家都在搜"。
+      tags: [trending-tags]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - name: include_translated_tag_results
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: 是否附带标签译名（部分客户端固定携带 true）
+      responses:
+        '200':
+          description: 趋势标签列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/TrendingTagsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/trending-tags/novel:
+    get:
+      operationId: getNovelTrendTags
+      summary: 小说趋势标签
+      description: |
+        请求时固定携带 `filter=for_android`。
+      tags: [trending-tags]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - name: include_translated_tag_results
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: 是否附带标签译名（部分客户端固定携带 true）
+      responses:
+        '200':
+          description: 趋势标签列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/TrendingTagsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）

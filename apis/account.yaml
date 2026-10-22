@@ -1,0 +1,124 @@
+# 账号管理接口（accounts.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv Account API
+  version: 1.0.0
+  description: |
+    Pixiv 账号管理接口。
+
+    ## 公共请求头
+
+    与 App API 相同：`X-Client-Time` / `X-Client-Hash`（盐值见 _shared.yaml）、
+    App-OS: Android、App-Version: 5.0.166、
+    User-Agent: `PixivAndroidApp/5.0.155 (Android 6.0; Pixel C)`。
+servers:
+  - url: https://accounts.pixiv.net
+    description: 账号服务器
+tags:
+  - name: account
+    description: 账号创建与资料修改
+paths:
+  /api/provisional-accounts/create:
+    post:
+      operationId: createProvisionalAccount
+      summary: 创建临时账号
+      description: |
+        创建一个无需邮箱/密码的临时账号，返回生成的账号名与密码。
+        
+        使用固定公开 Bearer 令牌 `l-f9qZ0ZyqSwRyZs8-MymbtWBbSxmCu1pmbOlyisou8`。
+      tags: [account]
+      security:
+        - provisionalAccountToken: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [user_name, ref]
+              properties:
+                user_name:
+                  type: string
+                  description: 期望的临时账号用户名（可能与实际生成的 userAccount 不同）
+                  example: "pixiv_user_123"
+                ref:
+                  type: string
+                  default: pixiv_android_app_provisional_account
+                  description: 来源标记，固定值
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/CreateUserResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /api/v2/account/edit:
+    post:
+      operationId: accountEdit
+      summary: 修改账号信息
+      description: |
+        修改账号的邮箱 / 用户名 / 密码。
+        客户端实现会自动携带当前登录账号的 `current_password`，
+        `Authorization` 头使用当前账号的 access_token。
+        当前客户端实际调用带版本号的 v2 路径
+        （更早的无版本 `/api/account/edit` 为历史路径）。
+      tags: [account]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                new_mail_address:
+                  type: string
+                  format: email
+                  description: 新邮箱地址
+                new_user_account:
+                  type: string
+                  description: 新用户名（Pixiv ID）
+                current_password:
+                  type: string
+                  format: password
+                  description: 当前密码（必填）
+                new_password:
+                  type: string
+                  format: password
+                  description: 新密码
+      responses:
+        '200':
+          description: 修改结果
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/AccountEditResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）
+    provisionalAccountToken:
+      type: http
+      scheme: bearer
+      description: |
+        创建临时账号（provisional account）时使用的固定公开 Bearer 令牌：
+        `l-f9qZ0ZyqSwRyZs8-MymbtWBbSxmCu1pmbOlyisou8`
+        （硬编码于 Pixiv Android 客户端）

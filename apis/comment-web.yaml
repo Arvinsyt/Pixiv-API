@@ -1,0 +1,390 @@
+# 评论接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Comment
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）评论（comment）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的全部端点：
+    插画/小说的根评论与回复列表，以及旧版 rpc 的评论发表/删除。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: comment-web
+    description: 评论查询接口（根评论、回复）
+  - name: comment-web-write
+    description: 评论写操作（发表、删除）
+paths:
+  /ajax/illusts/comments/roots:
+    get:
+      operationId: webIllustCommentRoots
+      summary: 插画的根评论列表（Web 版）
+      description: |
+        网页版作品页的评论主列表（limit/offset 翻页），
+        每条评论带回复数，楼中楼用 replies 端点拉取。
+        与 App API 的 `/v1/illust/comments` 能力对应。
+      tags: [comment-web]
+      security: []
+      parameters:
+        - name: illust_id
+          in: query
+          required: true
+          description: 作品 ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: true
+          description: 每页数量
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: true
+          description: 偏移量
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 根评论列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          comments:
+                            type: array
+                            description: 评论（含 id、comment、date、user、hasReplies 等，字段以实际响应为准）
+                            items:
+                              type: object
+                              additionalProperties: true
+                        additionalProperties: true
+
+  /ajax/illusts/comments/replies:
+    get:
+      operationId: webIllustCommentReplies
+      summary: 插画评论的回复列表（楼中楼）
+      description: |
+        某条根评论下的回复，page 从 0 开始翻页。
+      tags: [comment-web]
+      security: []
+      parameters:
+        - name: comment_id
+          in: query
+          required: true
+          description: 根评论 ID
+          schema:
+            type: integer
+        - name: page
+          in: query
+          required: true
+          description: 页码，从 0 开始
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 回复列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          comments:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: true
+                        additionalProperties: true
+
+  /ajax/novels/comments/roots:
+    get:
+      operationId: webNovelCommentRoots
+      summary: 小说的根评论列表（Web 版）
+      description: |
+        网页版小说页的评论主列表。与 App API 的 `/v1/novel/comments`
+        能力对应。
+      tags: [comment-web]
+      security: []
+      parameters:
+        - name: novel_id
+          in: query
+          required: true
+          description: 小说 ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: true
+          description: 每页数量
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: true
+          description: 偏移量
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 根评论列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          comments:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: true
+                        additionalProperties: true
+
+  /ajax/novels/comments/replies:
+    get:
+      operationId: webNovelCommentReplies
+      summary: 小说评论的回复列表（楼中楼）
+      description: |
+        某条根评论下的回复，page 从 0 开始翻页。
+      tags: [comment-web]
+      security: []
+      parameters:
+        - name: comment_id
+          in: query
+          required: true
+          description: 根评论 ID
+          schema:
+            type: integer
+        - name: page
+          in: query
+          required: true
+          description: 页码，从 0 开始
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 回复列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          comments:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: true
+                        additionalProperties: true
+
+  /rpc/post_comment.php:
+    post:
+      operationId: webRpcPostIllustComment
+      summary: 发表插画评论（Web rpc）
+      description: |
+        网页版评论写操作，效果同 App API 的 `POST /v1/illust/comment/add`。
+        需要登录 Cookie 与 CSRF token。
+      tags: [comment-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [illust_id, author_user_id, comment]
+              properties:
+                type:
+                  type: string
+                  enum: [comment, stamp]
+                  default: comment
+                  description: 评论类型（stamp=表情贴纸）
+                illust_id:
+                  type: integer
+                  description: 插画 ID
+                author_user_id:
+                  type: integer
+                  description: 作品作者的用户 ID
+                comment:
+                  type: string
+                  description: 评论内容（type=stamp 时为贴纸 ID）
+      responses:
+        '200':
+          description: 发表结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '400':
+          description: 参数缺失或 CSRF token 无效
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /rpc_delete_comment.php:
+    post:
+      operationId: webRpcDeleteIllustComment
+      summary: 删除插画评论（Web rpc）
+      description: |
+        删除自己发表的（或自己作品下的）插画评论。
+        与 App API 的 `/POST /v1/illust/comment/delete` 能力对应。
+        需要登录 Cookie 与 CSRF token。
+      tags: [comment-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [i_id, del_id]
+              properties:
+                i_id:
+                  type: integer
+                  description: 作品 ID
+                del_id:
+                  type: integer
+                  description: 要删除的评论 ID
+      responses:
+        '200':
+          description: 删除结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /novel/rpc/post_comment.php:
+    post:
+      operationId: webRpcPostNovelComment
+      summary: 发表小说评论（Web rpc）
+      description: |
+        网页版小说评论写操作，效果同 App API 的 `POST /v1/novel/comment/add`。
+        需要登录 Cookie 与 CSRF token。
+      tags: [comment-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [novel_id, author_user_id, comment]
+              properties:
+                type:
+                  type: string
+                  enum: [comment, stamp]
+                  default: comment
+                  description: 评论类型（stamp=表情贴纸）
+                novel_id:
+                  type: integer
+                  description: 小说 ID
+                author_user_id:
+                  type: integer
+                  description: 作品作者的用户 ID
+                comment:
+                  type: string
+                  description: 评论内容（type=stamp 时为贴纸 ID）
+      responses:
+        '200':
+          description: 发表结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '400':
+          description: 参数缺失或 CSRF token 无效
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /novel/rpc_delete_comment.php:
+    post:
+      operationId: webRpcDeleteNovelComment
+      summary: 删除小说评论（Web rpc）
+      description: |
+        删除自己发表的（或自己小说下的）评论。
+        与 App API 的 `POST /v1/novel/comment/delete` 能力对应。
+        需要登录 Cookie 与 CSRF token。
+      tags: [comment-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [i_id, del_id]
+              properties:
+                i_id:
+                  type: integer
+                  description: 小说 ID
+                del_id:
+                  type: integer
+                  description: 要删除的评论 ID
+      responses:
+        '200':
+          description: 删除结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'

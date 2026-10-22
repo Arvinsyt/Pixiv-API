@@ -1,0 +1,400 @@
+# 收藏接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Bookmark
+  version: 1.0.0
+  description: |
+    收藏（bookmark）相关接口。
+
+    涵盖插画/小说的收藏与取消收藏、收藏详情、用户的收藏列表与收藏标签。
+    认证方式与公共请求头约定见 `_shared.yaml` 顶部说明。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: illust-bookmark
+    description: 插画收藏
+  - name: novel-bookmark
+    description: 小说收藏
+paths:
+  /v2/illust/bookmark/add:
+    post:
+      operationId: postLikeIllust
+      summary: 收藏插画
+      description: |
+        可同时将作品添加到指定收藏标签下；多个标签以空格拼接为
+        一个字符串放入 `tags[]` 字段。
+      tags: [illust-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [illust_id]
+              properties:
+                illust_id:
+                  type: integer
+                restrict:
+                  type: string
+                  enum: [public, private]
+                  default: public
+                  description: 收藏可见性
+                'tags[]':
+                  type: string
+                  description: |
+                    收藏标签名，多个标签以空格分隔拼接为一个字符串
+                    （如 "东方 洛天依"）。
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/illust/bookmark/delete:
+    post:
+      operationId: postUnLikeIllust
+      summary: 取消收藏插画
+      tags: [illust-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [illust_id]
+              properties:
+                illust_id:
+                  type: integer
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v2/illust/bookmark/detail:
+    get:
+      operationId: getIllustBookmarkDetail
+      summary: 插画收藏详情
+      description: |
+        查询当前用户对某插画的收藏状态、
+        可用收藏标签及各标签的注册状态。
+      tags: [illust-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/IllustIdQuery'
+      responses:
+        '200':
+          description: 收藏详情
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/BookmarkDetailResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/user/bookmarks/illust:
+    get:
+      operationId: getBookmarksIllust
+      summary: 用户的插画收藏列表
+      description: |
+        可通过 tag 参数按收藏标签过滤。
+        翻页支持两种方式：`offset` 偏移量，或 `max_bookmark_id`
+        游标（响应 next_url 中携带的就是 max_bookmark_id）。
+      tags: [illust-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/UserIdQuery'
+        - $ref: '_shared.yaml#/components/parameters/Restrict'
+        - name: tag
+          in: query
+          required: false
+          description: 按收藏标签过滤
+          schema:
+            type: string
+        - name: max_bookmark_id
+          in: query
+          required: false
+          description: 翻页游标：上一页最后一条收藏的 bookmark id（取自 next_url）
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 收藏的插画列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/user/bookmark-tags/illust:
+    get:
+      operationId: getUserBookmarkTagsIllust
+      summary: 用户的插画收藏标签列表
+      description: |
+        查询（登录用户自己的）插画收藏标签。
+        user_id 可省略（缺省按登录用户处理），
+        传入时通常为本人 ID。
+      tags: [illust-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/UserIdQueryOptional'
+        - $ref: '_shared.yaml#/components/parameters/Restrict'
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 收藏标签列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustBookmarkTagsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/user/bookmark-tags/novel:
+    get:
+      operationId: getUserBookmarkTagsNovel
+      summary: 用户的小说收藏标签列表
+      description: |
+        查询（登录用户自己的）小说收藏标签。
+        user_id 可省略（缺省按登录用户处理），
+        传入时通常为本人 ID。
+      tags: [novel-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/UserIdQueryOptional'
+        - $ref: '_shared.yaml#/components/parameters/Restrict'
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 收藏标签列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelBookmarkTagsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v2/novel/bookmark/detail:
+    get:
+      operationId: getNovelBookmarkDetail
+      summary: 小说收藏详情
+      description: |
+        查询当前用户对某小说的收藏状态、
+        可用收藏标签及各标签的注册状态。
+      tags: [novel-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/NovelIdQuery'
+      responses:
+        '200':
+          description: 收藏详情
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelBookmarkDetailResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v2/novel/bookmark/add:
+    post:
+      operationId: postNovelBookmarkAdd
+      summary: 收藏小说
+      description: |
+        可同时将小说添加到指定收藏标签下（同插画版 `POST /v2/illust/bookmark/add`）。
+      tags: [novel-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [novel_id]
+              properties:
+                novel_id:
+                  type: integer
+                restrict:
+                  type: string
+                  enum: [public, private]
+                  default: public
+                  description: 收藏可见性
+                'tags[]':
+                  type: string
+                  description: |
+                    收藏标签名，多个标签以空格分隔拼接为一个字符串
+                    （如 "东方 洛天依"），也可重复发送多个 tags[] 字段。
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/novel/bookmark/delete:
+    post:
+      operationId: postNovelBookmarkDelete
+      summary: 取消收藏小说
+      tags: [novel-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [novel_id]
+              properties:
+                novel_id:
+                  type: integer
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/user/bookmarks/novel:
+    get:
+      operationId: getUserBookmarkNovel
+      summary: 用户的小说收藏列表
+      description: |
+        翻页支持两种方式：`offset` 偏移量，或 `max_bookmark_id`
+        游标（响应 next_url 中携带的就是 max_bookmark_id）。
+      tags: [novel-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/UserIdQuery'
+        - $ref: '_shared.yaml#/components/parameters/Restrict'
+        - name: tag
+          in: query
+          required: false
+          description: 按收藏标签过滤
+          schema:
+            type: string
+        - name: max_bookmark_id
+          in: query
+          required: false
+          description: 翻页游标：上一页最后一条收藏的 bookmark id（取自 next_url）
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 收藏的小说列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/illust/bookmark/users:
+    get:
+      operationId: getIllustBookmarkUsers
+      summary: 收藏了该插画的用户列表
+      description: |
+        查询收藏了某插画/漫画的公开用户（"喜欢这幅作品的人"）。
+      tags: [illust-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/IllustIdQuery'
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+      responses:
+        '200':
+          description: 收藏者列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/BookmarkUsersResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/novel/bookmark/users:
+    get:
+      operationId: getNovelBookmarkUsers
+      summary: 收藏了该小说的用户列表
+      description: |
+        查询收藏了某小说的公开用户（"喜欢这部作品的人"）。
+      tags: [novel-bookmark]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/NovelIdQuery'
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+      responses:
+        '200':
+          description: 收藏者列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/BookmarkUsersResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）

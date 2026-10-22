@@ -1,0 +1,94 @@
+# 漫画接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Manga
+  version: 1.0.0
+  description: |
+    漫画（manga）相关接口。
+
+    Pixiv 的漫画在数据结构上与插画共用 `Illust` 对象（type=manga）：
+    用户上传的漫画通过 user.yaml 的 `GET /v1/user/illusts?type=manga` 获取，
+    最新漫画通过 illust.yaml 的 `GET /v1/illust/new?content_type=manga` 获取，
+    漫画收藏通过 bookmark.yaml 获取，本文件仅包含漫画专属的推荐接口。
+    漫画追更（watchlist）见 series.yaml。
+
+    认证方式与公共请求头约定见 `_shared.yaml` 顶部说明。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: manga
+    description: 漫画推荐
+paths:
+  /v1/manga/recommended:
+    get:
+      operationId: getMangaRecommend
+      summary: 推荐漫画
+      description: |
+        请求时固定携带 `filter=for_ios` 与 `include_ranking_label=true`。
+      tags: [manga]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_ios]
+          description: 固定 for_ios
+        - name: include_ranking_label
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: include_privacy_policy
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: 是否包含隐私政策文本
+        - name: include_ranking_illusts
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: 是否附带排行榜作品列表；部分客户端固定传 false
+        - name: max_bookmark_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 翻页参数（取自 next_url）
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 推荐漫画列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+                  - type: object
+                    properties:
+                      ranking_label:
+                        type: string
+                        nullable: true
+                      privacy_policy:
+                        type: object
+                        nullable: true
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）

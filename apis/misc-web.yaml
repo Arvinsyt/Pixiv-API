@@ -1,0 +1,678 @@
+# 杂项接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Misc
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）的其余 AJAX / RPC 接口，完整收录开源实现中出现的全部端点：
+    账号设置、问卷、合集创建权限、WebPush、Pixiv Sketch 直播关注、
+    Street 街区流（含 v2 主接口）与移动版网页（touch）遗留端点。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: misc-web
+    description: 设置与其余查询接口（设置、问卷、权限、webpush、Sketch）
+  - name: street-web
+    description: Street 街区流（for_you/latest/recommend_tags/sub/v2 main）
+  - name: touch-web
+    description: 移动版网页（touch）遗留端点
+paths:
+  /ajax/settings:
+    get:
+      operationId: webSettings
+      summary: 账号设置（网页版）
+      description: |
+        网页版设置页的设置项：通知、邮件、语言、广告、AI 作品隐藏等。
+        与 App API 无直接对应。需要登录 Cookie。
+      tags: [misc-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 设置项
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          notifications:
+                            type: object
+                            description: 各类通知开关
+                            additionalProperties: true
+                          mail:
+                            type: object
+                            description: 邮件通知
+                            additionalProperties: true
+                          mailNotificationSuspended:
+                            type: boolean
+                          languages:
+                            type: object
+                            additionalProperties: true
+                          ads:
+                            type: object
+                            additionalProperties: true
+                          accountPortalLink:
+                            type: string
+                            description: 账号管理入口链接
+                          messageFlag:
+                            type: integer
+                          hideAiWorks:
+                            type: boolean
+                            description: 是否隐藏 AI 生成作品
+                          readingStatusOptout:
+                            type: boolean
+                          location:
+                            nullable: true
+                          allowCitationUser:
+                            type: boolean
+                          collectionCitedCount:
+                            type: integer
+                        additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/settings/self:
+    get:
+      operationId: webSettingsSelf
+      summary: 当前账号基本信息
+      description: |
+        设置页顶部的账号自信息：账号名、昵称、Premium 态、邮箱等。
+        需要登录 Cookie。
+      tags: [misc-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 账号自信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          user_status:
+                            type: object
+                            properties:
+                              user_id:
+                                type: string
+                              user_status:
+                                type: string
+                              user_account:
+                                type: string
+                                description: 账号名（登录 ID）
+                              user_name:
+                                type: string
+                                description: 昵称
+                              user_premium:
+                                type: string
+                                description: Premium 态
+                              user_birth:
+                                type: string
+                              user_x_restrict:
+                                type: string
+                                description: 年龄限制级别
+                              user_create_time:
+                                type: string
+                              user_mail_address:
+                                type: string
+                              profile_img:
+                                type: object
+                                properties:
+                                  main:
+                                    type: string
+                              age:
+                                type: integer
+                              is_logged_in:
+                                type: boolean
+                              stamp_series:
+                                type: array
+                                description: 可用表情贴纸系列
+                                items:
+                                  type: object
+                                  additionalProperties: true
+                            additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/enquete:
+    get:
+      operationId: webEnquete
+      summary: 问卷（enquete）
+      description: |
+        官方问卷（アンケート）数据。参考实现的响应样本为空数组，
+        字段未确认。
+      tags: [misc-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 问卷数据（响应样本为空数组，字段未确认）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        description: 问卷数据（样本为空数组，字段未确认）
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/collections/creation_permission_status:
+    get:
+      operationId: webCollectionsCreationPermissionStatus
+      summary: 合集创建权限状态
+      description: |
+        当前用户能否创建合集（collection）。需要登录 Cookie。
+      tags: [misc-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 权限状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            description: 权限状态（以实际响应为准）
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/webpush:
+    get:
+      operationId: webWebpush
+      summary: WebPush 权限状态
+      description: |
+        浏览器 WebPush 通知的权限状态。需要登录 Cookie。
+      tags: [misc-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 权限状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          permission:
+                            type: string
+                            description: 浏览器推送权限（granted/denied/default 等）
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/sketch/live/following:
+    get:
+      operationId: webSketchLiveFollowing
+      summary: 关注用户的 Sketch 直播列表
+      description: |
+        当前用户关注中的 Pixiv Sketch 直播列表。
+        参考实现的响应样本为空数组，字段未确认。需要登录 Cookie。
+      tags: [misc-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 直播列表（响应样本为空数组，字段未确认）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        description: 直播列表（样本为空数组，字段未确认）
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/street/for_you:
+    get:
+      operationId: webStreetForYou
+      summary: Street「为你推荐」
+      description: |
+        Street（街区）流的个性化推荐内容。需要登录 Cookie。
+      tags: [street-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 推荐内容
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          contents:
+                            type: array
+                            description: 内容块（字段未确认）
+                            items:
+                              type: object
+                              additionalProperties: true
+                          access:
+                            description: 访问标记（字段未确认）
+                        additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/street/latest:
+    get:
+      operationId: webStreetLatest
+      summary: Street 最新内容
+      description: |
+        Street（街区）流的最新内容块。
+      tags: [street-web]
+      security: []
+      responses:
+        '200':
+          description: 最新内容
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          content:
+                            type: object
+                            description: 内容块（字段未确认）
+                            additionalProperties: true
+                        additionalProperties: true
+
+  /ajax/street/recommend_tags:
+    get:
+      operationId: webStreetRecommendTags
+      summary: Street 推荐标签
+      description: |
+        Street（街区）流的推荐标签块（含标签缩略图）。
+      tags: [street-web]
+      security: []
+      responses:
+        '200':
+          description: 推荐标签
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          content:
+                            type: object
+                            properties:
+                              kind:
+                                type: string
+                              thumbnails:
+                                type: array
+                                items:
+                                  type: object
+                                  additionalProperties: true
+                              tags:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                                    translatedName:
+                                      type: string
+                                      nullable: true
+                                    isEmphasized:
+                                      type: boolean
+                            additionalProperties: true
+
+  /ajax/street/sub:
+    get:
+      operationId: webStreetSub
+      summary: Street 次级内容
+      description: |
+        Street（街区）流的次级内容块（sub）。
+      tags: [street-web]
+      security: []
+      responses:
+        '200':
+          description: 次级内容
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          contents:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: true
+
+  /ajax/street/v2/main:
+    post:
+      operationId: webStreetMain
+      summary: Street 主接口（v2）
+      description: |
+        Street（街区）流 v2 的主翻页接口：以游标 token（k 与 v* 系列参数，
+        取自上一响应的 nextParams）拉取下一页混合内容块
+        （轮播货架、精选、趋势标签等）。需要登录 Cookie 与 CSRF token。
+      tags: [street-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 上一响应 nextParams 给出的游标 token（首页可不带或按页面初始化值）
+              properties:
+                k:
+                  type: string
+                  description: 游标键
+                vhi:
+                  type: string
+                vhm:
+                  type: string
+                vhn:
+                  type: string
+                vhc:
+                  type: string
+      responses:
+        '200':
+          description: Street 内容块与下一页游标
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          contents:
+                            type: array
+                            description: |
+                              内容块列表：kind 区分类型——
+                              carousel（货架，含 title/listType/seeAllUrl）、
+                              trendTags（趋势标签）、pickup（精选）、
+                              separator（分隔）等；thumbnails 为混合形状的
+                              精简作品（插画/漫画/小说字段共存）
+                            items:
+                              type: object
+                              properties:
+                                kind:
+                                  type: string
+                                  description: 内容块类型（carousel/trendTags/pickup/separator 等）
+                                thumbnails:
+                                  type: array
+                                  items:
+                                    type: object
+                                    additionalProperties: true
+                                pickup:
+                                  type: object
+                                  additionalProperties: true
+                                trendTags:
+                                  type: array
+                                  items:
+                                    type: object
+                                    additionalProperties: true
+                                id:
+                                  type: string
+                                  description: separator 的分隔 ID
+                                title:
+                                  type: string
+                                  description: carousel 的货架标题（如「精选新作」）
+                                seeAllUrl:
+                                  type: string
+                                  description: carousel 的查看全部链接（站内相对路径）
+                                listType:
+                                  type: string
+                                  description: carousel 的货架语义（如 new_works）
+                              additionalProperties: true
+                          nextParams:
+                            type: object
+                            description: 下一页游标 token（结构与请求体同构）
+                            properties:
+                              k:
+                                type: string
+                              vhi:
+                                type: string
+                              vhm:
+                                type: string
+                              vhn:
+                                type: string
+                              vhc:
+                                type: string
+                            additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /touch/ajax/user/bookmarks:
+    get:
+      operationId: webTouchUserBookmarks
+      summary: 用户收藏（移动版 touch）
+      description: |
+        移动版网页（/touch）的用户收藏列表。开源客户端在
+        接口定义中声明但未在界面调用，作为 touch 遗留端点收录。
+        固定携带 version 查询参数（缓存版本号，可省略）。
+      tags: [touch-web]
+      security: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: type
+          in: query
+          required: true
+          description: 收藏类型
+          schema:
+            type: string
+            enum: [illust, novel]
+        - name: rest
+          in: query
+          required: true
+          description: 可见性
+          schema:
+            type: string
+            enum: [show, hide]
+        - name: p
+          in: query
+          required: false
+          description: 页码（参考实现固定 1）
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 收藏列表（移动版结构）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          page:
+                            type: object
+                            description: 分页与各区块 ID（recommendByTag/trendingTags/follow 等）
+                            additionalProperties: true
+                          total:
+                            type: integer
+                          thumbnails:
+                            $ref: '_shared.yaml#/components/schemas/WebThumbnails'
+                          tagTranslation:
+                            $ref: '_shared.yaml#/components/schemas/WebTagTranslation'
+                        additionalProperties: true
+
+  /touch/ajax/user/related:
+    get:
+      operationId: webTouchUserRelated
+      summary: 相关用户（移动版 touch）
+      description: |
+        移动版网页（/touch）的相关用户推荐。开源客户端在
+        接口定义中声明但未在界面调用（App 侧改用 app-api 的
+        `/v1/user/related`），作为 touch 遗留端点收录。
+      tags: [touch-web]
+      security: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: type
+          in: query
+          required: true
+          description: 固定 user
+          schema:
+            type: string
+        - name: rest
+          in: query
+          required: true
+          description: 可见性
+          schema:
+            type: string
+            enum: [show, hide]
+        - name: p
+          in: query
+          required: false
+          description: 页码（参考实现固定 1）
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 相关用户（移动版结构，与 user/bookmarks 同构）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          page:
+                            type: object
+                            additionalProperties: true
+                          total:
+                            type: integer
+                          thumbnails:
+                            $ref: '_shared.yaml#/components/schemas/WebThumbnails'
+                          tagTranslation:
+                            $ref: '_shared.yaml#/components/schemas/WebTagTranslation'
+                        additionalProperties: true
+
+  /touch/ajax/recommender/top_items:
+    get:
+      operationId: webTouchRecommenderTopItems
+      summary: 推荐作品（移动版 touch）
+      description: |
+        移动版网页（/touch）的推荐作品。开源客户端在接口
+        定义中声明但未在界面调用，作为 touch 遗留端点收录；
+        参考实现固定 mode=safe。
+      tags: [touch-web]
+      security: []
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: 内容分级（参考实现固定 safe）
+          schema:
+            type: string
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 推荐作品（移动版结构，字段以实际响应为准）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true

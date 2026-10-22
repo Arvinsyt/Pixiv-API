@@ -1,0 +1,368 @@
+# 插画/作品接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Illust
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）插画/作品（illust）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的
+    全部端点：作品详情兜底、逐页原图宽高、动图元数据、相关推荐、最新作品、点赞。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: illust-web
+    description: 插画/作品查询接口（详情、逐页宽高、动图、推荐、最新）
+  - name: illust-web-write
+    description: 插画写操作（点赞）
+paths:
+  /ajax/illust/{id}:
+    get:
+      operationId: webIllustDetail
+      summary: 作品详情（Web 版）
+      description: |
+        网页版作品详情。App API 对部分作品（企划募集、被屏蔽等）返回
+        visible=false 的空壳时可用它兜底：SFW 作品无 Cookie 也能拿，
+        R-18 详情亦可匿名读取。
+      tags: [illust-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 作品 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 作品详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          illustTitle:
+                            type: string
+                            description: 作品标题
+                          description:
+                            type: string
+                            description: 作品简介（HTML）
+                          illustType:
+                            type: integer
+                            description: 作品类型（0=插画，1=漫画，2=动图）
+                          createDate:
+                            type: string
+                          updateDate:
+                            type: string
+                          restrict:
+                            type: integer
+                          xRestrict:
+                            type: integer
+                            description: 内容分级（0=全年龄，1=R-18，2=R-18G）
+                          sl:
+                            type: integer
+                          urls:
+                            type: object
+                            description: 各尺寸图片地址（regular/small/original 等）
+                            additionalProperties:
+                              type: string
+                          tags:
+                            type: object
+                            description: 社区标签（与 GET /ajax/tags/illust/{id} 同构，含 writable 等权限信息）
+                            additionalProperties: true
+                          userId:
+                            type: string
+                          userName:
+                            type: string
+                          userAccount:
+                            type: string
+                        additionalProperties: true
+
+  /ajax/illust/{id}/pages:
+    get:
+      operationId: webIllustPages
+      summary: 作品逐页原图宽高
+      description: |
+        返回多页作品每一页的真实原图宽高与图片地址。
+        App API 的 meta_pages 只给 image_urls、不带宽高，
+        需要预知尺寸的场景（如下载前排版）只能走这条。需要网页 Cookie，
+        缺失时接口返回 error/403。
+      tags: [illust-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 逐页宽高与地址
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            width:
+                              type: integer
+                            height:
+                              type: integer
+                            urls:
+                              type: object
+                              description: 各尺寸图片地址（thumb_mini/mini/small/regular/original 等）
+                              additionalProperties:
+                                type: string
+                          required: [width, height]
+
+  /ajax/illust/{id}/ugoira_meta:
+    get:
+      operationId: webIllustUgoiraMeta
+      summary: 动图元数据（Web 版）
+      description: |
+        网页版动图（ugoira）播放元数据：压缩包地址与逐帧时长。
+        与 App API 的 `/v1/ugoria/metadata` 能力对应，字段以实际响应为准。
+      tags: [illust-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 动图作品 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 动图元数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          src:
+                            type: string
+                            description: 压缩包（zip）地址
+                          originalSrc:
+                            type: string
+                            description: 原始压缩包地址
+                          mime_type:
+                            type: string
+                            description: 压缩包 MIME 类型（image/gif 等）
+                          frames:
+                            type: array
+                            description: 逐帧列表
+                            items:
+                              type: object
+                              properties:
+                                file:
+                                  type: string
+                                  description: 帧图片文件名
+                                delay:
+                                  type: integer
+                                  description: 该帧展示时长（毫秒）
+                              required: [file, delay]
+                        additionalProperties: true
+
+  /ajax/illust/{id}/recommend/init:
+    get:
+      operationId: webIllustRecommendInit
+      summary: 作品的相关推荐（初始化）
+      description: |
+        某作品详情页「相关作品」推荐的第一批数据：作品列表、下一批 ID
+        与详情，nextIds 可继续用 GET /ajax/illust/recommend/illusts 拉取。
+        SFW 匿名可拿。
+      tags: [illust-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 作品 ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: true
+          description: 单次返回数量
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 相关推荐初始化数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          illusts:
+                            type: array
+                            description: 推荐作品精简对象列表
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebIllustItem'
+                          nextIds:
+                            type: array
+                            description: 下一批推荐的作品 ID
+                            items:
+                              type: integer
+                          details:
+                            type: array
+                            description: 推荐详情（推荐方法等）
+                            items:
+                              type: object
+                              additionalProperties: true
+                        additionalProperties: true
+
+  /ajax/illust/recommend/illusts:
+    get:
+      operationId: webIllustRecommendIllusts
+      summary: 作品的相关推荐（按 ID 批量取）
+      description: |
+        用 GET /ajax/illust/{id}/recommend/init 返回的 nextIds 批量取
+        推荐作品的完整数据。
+      tags: [illust-web]
+      security: []
+      parameters:
+        - name: illust_ids
+          in: query
+          required: true
+          description: 推荐 init 返回的下一批作品 ID（重复参数）
+          schema:
+            type: array
+            items:
+              type: integer
+      responses:
+        '200':
+          description: 推荐作品数据（键为作品 ID 的 map）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties:
+                          $ref: '_shared.yaml#/components/schemas/WebIllustItem'
+
+  /ajax/illust/new:
+    get:
+      operationId: webIllustNew
+      summary: 全站最新作品（Web 版）
+      description: |
+        网页版「最新作品」 feed。与 App API 的 `/v1/illust/new`、
+        `/v1/novel/new` 能力对应，type 参数在同一个端点内区分
+        插画/漫画/小说。
+      tags: [illust-web]
+      security: []
+      parameters:
+        - name: lastId
+          in: query
+          required: false
+          description: 翻页游标：上一页最后一条的作品 ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: true
+          description: 单次返回数量
+          schema:
+            type: integer
+        - name: type
+          in: query
+          required: true
+          description: 作品类型
+          schema:
+            type: string
+            enum: [illust, manga, novel]
+        - name: r18
+          in: query
+          required: true
+          description: 是否包含 R-18（登录态下才生效）
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: 最新作品
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          illusts:
+                            type: object
+                            description: 精简作品 map（键为作品 ID）
+                            additionalProperties:
+                              $ref: '_shared.yaml#/components/schemas/WebIllustItem'
+                        additionalProperties: true
+
+  /ajax/illusts/like:
+    post:
+      operationId: webIllustLike
+      summary: 给作品点赞
+      description: |
+        网页版点赞（いいね）。与 App API 无对应端点（App 客户端不做点赞）。
+        需要登录 Cookie 与 CSRF token。
+      tags: [illust-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [illust_id]
+              properties:
+                illust_id:
+                  type: integer
+                  description: 作品 ID
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功，body 含最新点赞数等）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'

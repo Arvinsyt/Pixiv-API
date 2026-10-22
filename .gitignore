@@ -1,0 +1,41 @@
+# 依赖
+node_modules/
+
+# VitePress 构建产物
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# 日志
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# 工作暂存区（第三方源码、草稿）
+tmp/
+
+# Vite 本地覆盖配置
+*.local
+
+# Python(scripts/)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 编辑器
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# 操作系统
+.DS_Store
+Thumbs.db
+Desktop.ini

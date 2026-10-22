@@ -1,0 +1,279 @@
+# 评论接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Comment
+  version: 1.0.0
+  description: |
+    评论相关接口（插画评论、小说评论、回复、发表/删除评论、评论表情贴纸），
+
+    认证方式与公共请求头约定见 `_shared.yaml` 顶部说明。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: illust-comment
+    description: 插画评论
+  - name: novel-comment
+    description: 小说评论
+  - name: stamp
+    description: 评论表情贴纸
+paths:
+  /v3/illust/comments:
+    get:
+      operationId: getIllustComments
+      summary: 插画评论列表
+      tags: [illust-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/IllustIdQuery'
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 评论列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/CommentResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v2/illust/comment/replies:
+    get:
+      operationId: getIllustCommentsReplies
+      summary: 插画评论的回复
+      tags: [illust-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/CommentIdQuery'
+      responses:
+        '200':
+          description: 回复列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/CommentResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/illust/comment/add:
+    post:
+      operationId: postIllustComment
+      summary: 发表插画评论
+      description: |
+        可带 parent_comment_id 回复指定评论。
+      tags: [illust-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [illust_id, comment]
+              properties:
+                illust_id:
+                  type: integer
+                comment:
+                  type: string
+                  description: 评论内容（支持 `[emoji:123]` 语法发送表情贴纸；发 stamp 贴纸评论时传空字符串）
+                parent_comment_id:
+                  type: integer
+                  description: 被回复的评论 ID；不传则为一级评论
+                stamp_id:
+                  type: integer
+                  description: 表情贴纸 ID（见 GET /v1/stamps）；发送贴纸评论时 comment 传空字符串
+      responses:
+        '200':
+          description: 发表成功，返回刚发表的评论
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/CommentResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/illust/comment/delete:
+    post:
+      operationId: postIllustCommentDelete
+      summary: 删除插画评论
+      description: |
+        删除自己发表的评论（他人评论无法删除）。
+      tags: [illust-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [comment_id]
+              properties:
+                comment_id:
+                  type: integer
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/stamps:
+    get:
+      operationId: getStamps
+      summary: 评论表情贴纸目录
+      description: |
+        返回评论可用的表情贴纸列表（stamp_id + stamp_url），
+        官方常驻约 40 个。发送贴纸评论时把 stamp_id 传给
+        `POST /v1/illust/comment/add` 或 `POST /v1/novel/comment/add`。
+      tags: [stamp]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      responses:
+        '200':
+          description: 贴纸目录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/StampsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v3/novel/comments:
+    get:
+      operationId: getNovelComments
+      summary: 小说评论列表
+      tags: [novel-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/NovelIdQuery'
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 评论列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/CommentResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v2/novel/comment/replies:
+    get:
+      operationId: getNovelCommentsReplies
+      summary: 小说评论的回复
+      tags: [novel-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/CommentIdQuery'
+      responses:
+        '200':
+          description: 回复列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/CommentResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/novel/comment/add:
+    post:
+      operationId: postNovelComment
+      summary: 发表小说评论
+      tags: [novel-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [novel_id, comment]
+              properties:
+                novel_id:
+                  type: integer
+                comment:
+                  type: string
+                  description: 评论内容（发 stamp 贴纸评论时传空字符串）
+                parent_comment_id:
+                  type: integer
+                  description: 被回复的评论 ID；不传则为一级评论
+                stamp_id:
+                  type: integer
+                  description: 表情贴纸 ID（见 GET /v1/stamps）
+      responses:
+        '200':
+          description: 发表成功，返回刚发表的评论
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/CommentResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/novel/comment/delete:
+    post:
+      operationId: postNovelCommentDelete
+      summary: 删除小说评论
+      description: |
+        删除自己发表的评论（他人评论无法删除）。
+      tags: [novel-comment]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [comment_id]
+              properties:
+                comment_id:
+                  type: integer
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）

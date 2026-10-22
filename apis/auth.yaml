@@ -1,0 +1,158 @@
+# OAuth 认证接口（oauth.secure.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv OAuth API
+  version: 1.0.0
+  description: |
+    Pixiv OAuth2 令牌接口。
+
+    ## 客户端凭据（随 Pixiv Android 客户端公开发布，硬编码于源码中）
+
+    | 字段 | 值 |
+    |---|---|
+    | client_id | `MOBrBDS8blbauoSck0ZfDbtuzpyT` |
+    | client_secret | `lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj` |
+
+    ## 公共请求头
+
+    所有请求需携带 `X-Client-Time`（ISO 8601 本地时间）与 `X-Client-Hash`
+    （`MD5(X-Client-Time + 28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c)`），
+    以及 App-OS: Android / App-OS-Version / App-Version: 5.0.166 /
+    User-Agent: `PixivAndroidApp/5.0.155 (Android 6.0; Pixel C)`。
+
+    ## 网页登录（PKCE，供 WebView 使用）
+
+    客户端通过 WebView 打开以下 URL 完成"无需密码"的登录/注册，
+    拿到 code 后以 `grant_type=authorization_code` 换取令牌：
+
+    - 登录：`https://app-api.pixiv.net/web/v1/login?code_challenge={challenge}&code_challenge_method=S256&client=pixiv-android`
+    - 创建临时账号：`https://app-api.pixiv.net/web/v1/provisional-accounts/create?code_challenge={challenge}&code_challenge_method=S256&client=pixiv-android`
+
+    其中 `code_challenge = BASE64URL(SHA256(code_verifier))`，`code_verifier` 为随机串。
+servers:
+  - url: https://oauth.secure.pixiv.net
+    description: OAuth 服务器
+tags:
+  - name: auth
+    description: OAuth2 令牌获取与刷新
+paths:
+  /auth/token:
+    post:
+      operationId: postAuthToken
+      summary: 获取/刷新访问令牌
+      description: |
+        本端点支持三种授权模式，通过 `grant_type` 区分：
+
+        - **password**：账号密码登录
+        - **authorization_code**：WebView PKCE 登录换取令牌
+        - **refresh_token**：使用 refresh_token 刷新
+      tags: [auth]
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id, client_secret]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [password, authorization_code, refresh_token]
+                client_id:
+                  type: string
+                  default: MOBrBDS8blbauoSck0ZfDbtuzpyT
+                client_secret:
+                  type: string
+                  default: lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj
+                # ---- grant_type=password ----
+                username:
+                  type: string
+                  description: Pixiv ID / 邮箱地址（password 授权必填）
+                password:
+                  type: string
+                  format: password
+                  description: 密码（password 授权必填）
+                Device_token:
+                  type: string
+                  default: pixiv
+                  description: 设备令牌；固定传 `pixiv`（注意字段名首字母大写，与服务端约定如此）
+                get_secure_url:
+                  type: boolean
+                  default: true
+                  description: 是否返回安全图片 URL
+                include_policy:
+                  type: boolean
+                  default: true
+                  description: 是否包含隐私政策信息
+                # ---- grant_type=authorization_code ----
+                code:
+                  type: string
+                  description: WebView 登录回调得到的授权码
+                code_verifier:
+                  type: string
+                  description: PKCE code_verifier（authorization_code 授权必填）
+                redirect_uri:
+                  type: string
+                  format: uri
+                  default: https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback
+                # ---- grant_type=refresh_token ----
+                refresh_token:
+                  type: string
+                  description: 刷新令牌（refresh_token 授权必填）
+            examples:
+              passwordGrant:
+                summary: 账号密码登录
+                value:
+                  client_id: MOBrBDS8blbauoSck0ZfDbtuzpyT
+                  client_secret: lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj
+                  grant_type: password
+                  username: user@example.com
+                  password: "123456"
+                  Device_token: pixiv
+                  get_secure_url: true
+                  include_policy: true
+              authorizationCodeGrant:
+                summary: WebView PKCE 登录换取令牌
+                value:
+                  code: abcdef123456
+                  redirect_uri: https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback
+                  grant_type: authorization_code
+                  include_policy: true
+                  client_id: MOBrBDS8blbauoSck0ZfDbtuzpyT
+                  code_verifier: random-verifier-string
+                  client_secret: lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj
+              refreshTokenGrant:
+                summary: 刷新令牌
+                value:
+                  client_id: MOBrBDS8blbauoSck0ZfDbtuzpyT
+                  client_secret: lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj
+                  grant_type: refresh_token
+                  refresh_token: xxxxxxxxxxxx
+                  include_policy: true
+      responses:
+        '200':
+          description: 令牌获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/TokenResponse'
+        '400':
+          description: 参数错误或凭据无效（如 grant_type 不支持、code 无效）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/ErrorMessage'
+              example:
+                error:
+                  user_message: ""
+                  message: "invalid_grant"
+                  reason: ""
+        '403':
+          description: 密码错误、账号被锁或地区限制
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/ErrorMessage'

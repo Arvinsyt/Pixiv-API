@@ -1,0 +1,378 @@
+# 小说接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Novel
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）小说（novel）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的
+    全部端点：小说详情、相关推荐、点赞、阅读标记、编辑精选与题材分类页。
+    小说系列相关端点见 `series-web.yaml`。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: novel-web
+    description: 小说查询接口（详情、推荐、编辑精选、题材分类）
+  - name: novel-web-write
+    description: 小说写操作（点赞、阅读标记）
+paths:
+  /ajax/novel/{id}:
+    get:
+      operationId: webNovelDetail
+      summary: 小说详情（Web 版）
+      description: |
+        网页版小说详情：简介、字数/阅读用时、系列归属、阅读标记等
+        Web 侧字段。SFW 匿名可读。
+      tags: [novel-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 小说详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          title:
+                            type: string
+                          description:
+                            type: string
+                            description: 简介（HTML）
+                          genre:
+                            type: string
+                            description: 题材名
+                          xRestrict:
+                            type: integer
+                            description: 内容分级（0=全年龄，1=R-18，2=R-18G）
+                          userId:
+                            type: string
+                          userName:
+                            type: string
+                          textCount:
+                            type: integer
+                            description: 字数
+                          wordCount:
+                            type: integer
+                            description: 单词数
+                          readingTime:
+                            type: integer
+                            description: 预计阅读用时（分钟）
+                          marker:
+                            type: object
+                            nullable: true
+                            description: 当前用户的阅读标记（page 等），无为 null
+                          seriesId:
+                            type: string
+                            nullable: true
+                          seriesTitle:
+                            type: string
+                            nullable: true
+                          isOriginal:
+                            type: boolean
+                          bookmarkCount:
+                            type: integer
+                          aiType:
+                            type: integer
+                          language:
+                            type: string
+                        additionalProperties: true
+
+  /ajax/novel/{id}/recommend/init:
+    get:
+      operationId: webNovelRecommendInit
+      summary: 小说的相关推荐（初始化）
+      description: |
+        某篇小说详情页「相关作品」推荐的第一批数据（推荐 ID 列表）。
+        App API 没有 novel 版 related 端点（illust 的 `/v2/illust/related`
+        无小说对应物），只能走网页版数据源。SFW 匿名可拿。
+      tags: [novel-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说 ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          description: 单次返回数量
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 相关推荐初始化数据（含推荐 ID 与详情）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+
+  /ajax/novel/recommend/illusts:
+    get:
+      operationId: webNovelRecommendIllusts
+      summary: 小说的相关推荐（按 ID 批量取）
+      description: |
+        用 GET /ajax/novel/{id}/recommend/init 返回的 ID 批量取
+        推荐小说的完整数据。
+      tags: [novel-web]
+      security: []
+      parameters:
+        - name: novel_ids
+          in: query
+          required: true
+          description: 推荐 init 返回的下一批小说 ID（重复参数）
+          schema:
+            type: array
+            items:
+              type: integer
+      responses:
+        '200':
+          description: 推荐小说数据（键为小说 ID 的 map）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties:
+                          $ref: '_shared.yaml#/components/schemas/WebNovelItem'
+
+  /ajax/novels/like:
+    post:
+      operationId: webNovelLike
+      summary: 给小说点赞
+      description: |
+        网页版点赞（いいね）。与插画版 `/ajax/illusts/like` 同构。
+        需要登录 Cookie 与 CSRF token。
+      tags: [novel-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [novel_id]
+              properties:
+                novel_id:
+                  type: string
+                  description: 小说 ID
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功，body 含最新点赞数等）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /novel/rpc_marker.php:
+    post:
+      operationId: webNovelMarkerSave
+      summary: 保存小说阅读标记
+      description: |
+        网页版阅读进度标记（读到第几页）。与 App API 的
+        `/v2/novel/marker/save` 能力对应。需要登录 Cookie 与 CSRF token。
+      tags: [novel-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [mode, i_id, u_id, page]
+              properties:
+                mode:
+                  type: string
+                  enum: [save]
+                  description: 固定 save
+                i_id:
+                  type: string
+                  description: 小说 ID
+                u_id:
+                  type: string
+                  description: 用户 ID（登录用户自身）
+                page:
+                  type: string
+                  description: 已读到的页码
+      responses:
+        '200':
+          description: 保存结果（参考实现直接读 JSON，非 AJAX 信封，字段以实际响应为准）
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novel/editors_picks:
+    get:
+      operationId: webNovelEditorsPicks
+      summary: 小说编辑精选
+      description: |
+        网页版小说区「編集部のおすすめ」（编辑精选）系列列表。
+        App API 无对应能力。
+      tags: [novel-web]
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: 单次返回数量
+          schema:
+            type: integer
+        - name: date
+          in: query
+          required: false
+          description: 日期（编辑精选按日期轮换）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 编辑精选
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          page:
+                            type: object
+                            properties:
+                              ids:
+                                type: array
+                                description: 精选小说系列 ID
+                                items:
+                                  type: string
+                            additionalProperties: true
+                          tagTranslation:
+                            $ref: '_shared.yaml#/components/schemas/WebTagTranslation'
+                          thumbnails:
+                            $ref: '_shared.yaml#/components/schemas/WebThumbnails'
+                          users:
+                            type: array
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebUserItem'
+                        additionalProperties: true
+
+  /ajax/genre/novel/{genre}:
+    get:
+      operationId: webNovelGenre
+      summary: 小说题材分类页
+      description: |
+        网页版小说按题材（ジャンル）分类的专区数据：精选/人气系列、
+        标签译名与作品缩略图。App API 无对应能力。
+      tags: [novel-web]
+      security: []
+      parameters:
+        - name: genre
+          in: path
+          required: true
+          description: 题材标识
+          schema:
+            type: string
+            enum: [all, romance, isekai_fantasy, contemporary_fantasy, mystery,
+                   horror, sci-fi, literature, drama, historical_pieces, bl,
+                   yuri, for_kids, poetry, non-fiction, screenplays, reviews,
+                   other]
+        - name: mode
+          in: query
+          required: false
+          description: 内容分级过滤
+          schema:
+            type: string
+            enum: [safe, r18]
+      responses:
+        '200':
+          description: 题材分类页数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          page:
+                            type: object
+                            properties:
+                              pickupDate:
+                                type: string
+                                description: 精选日期
+                              pickupSeriesIds:
+                                type: array
+                                description: 编辑精选系列 ID
+                                items:
+                                  type: string
+                              popularSeriesIds:
+                                type: array
+                                description: 人气系列 ID
+                                items:
+                                  type: string
+                              genrePageGender:
+                                type: string
+                                description: 题材页性别倾向标记
+                            additionalProperties: true
+                          tagTranslation:
+                            $ref: '_shared.yaml#/components/schemas/WebTagTranslation'
+                          thumbnails:
+                            $ref: '_shared.yaml#/components/schemas/WebThumbnails'
+                          users:
+                            type: array
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebUserItem'
+                          zoneConfig:
+                            $ref: '_shared.yaml#/components/schemas/WebZoneConfig'
+                        additionalProperties: true

@@ -1,0 +1,594 @@
+# 系列与追更接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Series
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）系列（series）与追更（watchlist）相关的
+    AJAX / RPC 接口，完整收录开源实现中
+    出现的全部端点：插画/小说系列详情、系列内容列表与章节目录、
+    追更的开/关、追更通知开关与追更列表。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: series-web
+    description: 系列查询接口（详情、内容列表、章节目录）
+  - name: series-web-watch
+    description: 追更与通知（watch/unwatch、通知开关、追更列表）
+paths:
+  /ajax/series/{id}:
+    get:
+      operationId: webIllustSeriesDetail
+      summary: 插画系列详情（Web 版）
+      description: |
+        网页版插画/漫画系列详情。与 App API 的 `/v1/illust/series`
+        能力对应，p 为页码。
+      tags: [series-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画系列 ID
+          schema:
+            type: integer
+        - name: p
+          in: query
+          required: false
+          description: 页码，从 1 开始
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: 插画系列详情（body 含系列信息与作品列表，字段以实际响应为准）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+
+  /ajax/novel/series/{id}:
+    get:
+      operationId: webNovelSeriesDetail
+      summary: 小说系列详情（Web 版）
+      description: |
+        网页版小说系列详情。与 App API 的 `/v2/novel/series` 相比
+        多出观看数等 Web 侧字段。系列内作品列表见 series_content。
+      tags: [series-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 小说系列详情（含 isWatched/isNotifying 等追更态，字段以实际响应为准）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        allOf:
+                          - $ref: '_shared.yaml#/components/schemas/WebNovelSeriesItem'
+                          - type: object
+                            additionalProperties: true
+
+  /ajax/novel/series_content/{id}:
+    get:
+      operationId: webNovelSeriesContent
+      summary: 小说系列内的作品列表（Web 版）
+      description: |
+        网页版小说系列的内容列表，支持按 order 排序与分页。
+        与 App API 的 `/v2/novel/series`（带 content_order 翻页）能力对应。
+      tags: [series-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          description: 每页数量
+          schema:
+            type: integer
+        - name: last_order
+          in: query
+          required: false
+          description: 翻页参数：上一页最后一条的 order
+          schema:
+            type: integer
+        - name: order_by
+          in: query
+          required: false
+          description: 排序方向（asc=正序，dsc=倒序）
+          schema:
+            type: string
+            enum: [asc, dsc]
+        - name: page
+          in: query
+          required: false
+          description: 页码（与 last_order 二选一的翻页方式）
+          schema:
+            type: integer
+        - name: size
+          in: query
+          required: false
+          description: 每页数量（page 翻页时使用）
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 系列内容列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          seriesContents:
+                            type: array
+                            description: 系列内小说条目
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebNovelItem'
+                        additionalProperties: true
+
+  /ajax/novel/series/{id}/content_titles:
+    get:
+      operationId: webNovelSeriesContentTitles
+      summary: 小说系列章节目录
+      description: |
+        系列全部章节的 ID 与标题（一次拿全，无分页）。
+        用于目录展示/预取，配合 GET /ajax/user/{id}/novels 批量取正文。
+      tags: [series-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 章节目录
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            available:
+                              type: boolean
+                              description: 是否可见（R-18 等情况下为 false）
+                            id:
+                              type: string
+                              description: 章节（小说）ID
+                            title:
+                              type: string
+                          required: [id, title]
+
+  /ajax/illust/series/{id}/watch:
+    get:
+      operationId: webWatchIllustSeries
+      summary: 追更插画系列（开启）
+      description: |
+        把插画/漫画系列加入追更（ウォッチ）。参考实现以 GET 调用。
+        与 App API 无对应端点（App 客户端无追更功能）。
+        需要登录 Cookie。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画系列 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illust/series/{id}/unwatch:
+    get:
+      operationId: webUnwatchIllustSeries
+      summary: 取消追更插画系列
+      description: |
+        把插画/漫画系列移出追更。参考实现以 GET 调用。需要登录 Cookie。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画系列 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illust/series/{id}/watchlist/notification/turn_on:
+    post:
+      operationId: webIllustSeriesNotifyOn
+      summary: 开启插画系列追更通知
+      description: |
+        追更系列的更新通知开关（开启）。需要登录 Cookie 与 CSRF token。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画系列 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 空对象
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illust/series/{id}/watchlist/notification/turn_off:
+    post:
+      operationId: webIllustSeriesNotifyOff
+      summary: 关闭插画系列追更通知
+      description: |
+        追更系列的更新通知开关（关闭）。需要登录 Cookie 与 CSRF token。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画系列 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 空对象
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novel/series/{id}/watch:
+    post:
+      operationId: webWatchNovelSeries
+      summary: 追更小说系列（开启）
+      description: |
+        把小说系列加入追更（ウォッチ）。参考实现以 POST + 空 JSON 调用
+        （与插画系列的 GET 形式不同）。需要登录 Cookie 与 CSRF token。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 空对象
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novel/series/{id}/unwatch:
+    post:
+      operationId: webUnwatchNovelSeries
+      summary: 取消追更小说系列
+      description: |
+        把小说系列移出追更。参考实现以 POST + 空 JSON 调用。
+        需要登录 Cookie 与 CSRF token。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 空对象
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novel/series/{id}/watchlist/notification/turn_on:
+    post:
+      operationId: webNovelSeriesNotifyOn
+      summary: 开启小说系列追更通知
+      description: |
+        追更系列的更新通知开关（开启）。需要登录 Cookie 与 CSRF token。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 空对象
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novel/series/{id}/watchlist/notification/turn_off:
+    post:
+      operationId: webNovelSeriesNotifyOff
+      summary: 关闭小说系列追更通知
+      description: |
+        追更系列的更新通知开关（关闭）。需要登录 Cookie 与 CSRF token。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 空对象
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/watch_list/{type}:
+    get:
+      operationId: webWatchList
+      summary: 追更列表
+      description: |
+        当前用户追更中的系列列表（漫画/小说）。App API 无对应端点。
+        需要登录 Cookie。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: 系列类型
+          schema:
+            type: string
+            enum: [manga, novel]
+        - name: p
+          in: query
+          required: false
+          description: 页码，从 1 开始
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: 追更列表（novel 时含 novelSeries 列表，与 watchlist 版同构）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          page:
+                            type: object
+                            description: 分页与 watchedSeriesIds 等
+                            additionalProperties: true
+                          thumbnails:
+                            $ref: '_shared.yaml#/components/schemas/WebThumbnails'
+                        additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/top/novel/watchlist:
+    get:
+      operationId: webTopWatchlist
+      summary: 小说追更专区（Top watchlist）
+      description: |
+        网页版小说区「ウォッチリスト」追更专区的系列数据。
+        需要登录 Cookie。
+      tags: [series-web-watch]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: 内容分级过滤
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 追更专区数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          page:
+                            type: object
+                            properties:
+                              watchedSeriesIds:
+                                type: array
+                                description: 追更中的系列 ID
+                                items:
+                                  type: integer
+                            additionalProperties: true
+                          novelSeries:
+                            type: array
+                            description: 追更中的系列详情
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebNovelSeriesItem'
+                        additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'

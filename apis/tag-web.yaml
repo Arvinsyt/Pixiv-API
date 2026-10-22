@@ -1,0 +1,429 @@
+# 标签接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Tag
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）标签（tag）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的
+    全部端点：标签百科、输入联想、频出标签、作品社区标签的可编辑态与
+    增删、收藏标签（お気に入りタグ）保存与标签故事。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: tag-web
+    description: 标签查询接口（百科、联想、频出标签、标签故事）
+  - name: tag-web-write
+    description: 标签写操作（社区标签增删、收藏标签保存）
+paths:
+  /ajax/tag/info:
+    get:
+      operationId: webTagInfo
+      summary: 标签详情
+      description: |
+        标签的百科信息：摘要、封面图与各语言翻译。
+        App API 无对应能力。无需登录。
+      tags: [tag-web]
+      security: []
+      parameters:
+        - name: tag
+          in: query
+          required: true
+          description: 标签名
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 标签详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          tag:
+                            type: string
+                          abstract:
+                            type: string
+                            description: 标签摘要（Pixiv 百科简介）
+                          thumbnail:
+                            type: string
+                            description: 标签封面图 URL
+                          en:
+                            type: string
+                            nullable: true
+                            description: 英文翻译
+                          en_new:
+                            type: string
+                            nullable: true
+                            description: 英文翻译（新版字段）
+                          ja:
+                            type: string
+                            nullable: true
+                            description: 日文原文/译名
+                          ja_new:
+                            type: string
+                            nullable: true
+                            description: 日文原文/译名（新版字段）
+                          is_view_lead_wire:
+                            type: boolean
+                            description: 是否展示引导线（百科页面装饰标记）
+                        additionalProperties: true
+
+  /ajax/tags/suggest_by_word:
+    get:
+      operationId: webTagSuggestByWord
+      summary: 标签输入联想
+      description: |
+        打标签/搜索时的标签联想（部分一致匹配），带作品计数。
+        与 App API 的 `/v1/search/autocomplete` 能力对应。
+      tags: [tag-web]
+      security: []
+      parameters:
+        - name: word
+          in: query
+          required: true
+          description: 输入中的关键词
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 联想标签列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            tag_name:
+                              type: string
+                              description: 标签名
+                            illust_count:
+                              type: integer
+                              description: 相关插画数
+                            total_count:
+                              type: integer
+                              description: 相关作品总数
+                          required: [tag_name]
+
+  /ajax/tags/frequent/illust:
+    get:
+      operationId: webFrequentTagsIllust
+      summary: 插画的频出标签
+      description: |
+        一批插画最常同时出现的标签（打标签面板的推荐标签数据源）。
+        App API 无对应能力。
+      tags: [tag-web]
+      security: []
+      parameters:
+        - name: 'ids[]'
+          in: query
+          required: true
+          description: 插画 ID（PHP 数组风格，重复参数）
+          schema:
+            type: array
+            items:
+              type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 频出标签
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            tag:
+                              type: string
+                            tag_translation:
+                              type: string
+                              nullable: true
+                          required: [tag]
+
+  /ajax/tags/frequent/novel:
+    get:
+      operationId: webFrequentTagsNovel
+      summary: 小说的频出标签
+      description: |
+        一批小说最常同时出现的标签。与插画版同构。
+      tags: [tag-web]
+      security: []
+      parameters:
+        - name: 'ids[]'
+          in: query
+          required: true
+          description: 小说 ID（PHP 数组风格，重复参数）
+          schema:
+            type: array
+            items:
+              type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 频出标签
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            tag:
+                              type: string
+                            tag_translation:
+                              type: string
+                              nullable: true
+                          required: [tag]
+
+  /ajax/tags/illust/{id}:
+    get:
+      operationId: webIllustEditableTags
+      summary: 作品标签的可编辑态
+      description: |
+        网页独有的社区标签机制：作品上每个标签谁加的、哪些能删、
+        当前用户能不能加标签。匿名也能读（writable 恒 false）。
+        App API 的 illust.tags 只有名字和译名，无权限信息。
+      tags: [tag-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 标签可编辑态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          authorId:
+                            type: string
+                            nullable: true
+                          isLocked:
+                            type: boolean
+                            description: 作者是否关闭了「公开让其他会员编辑标签」
+                          writable:
+                            type: boolean
+                            description: 当前用户现在能否加标签（匿名恒 false）
+                          tags:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                tag:
+                                  type: string
+                                locked:
+                                  type: boolean
+                                  description: 作者指定的标签，谁都删不掉
+                                deletable:
+                                  type: boolean
+                                  description: 当前用户能否删这一条
+                                userId:
+                                  type: string
+                                  nullable: true
+                                  description: 添加者用户 ID
+                                userName:
+                                  type: string
+                                  nullable: true
+                                translation:
+                                  type: object
+                                  description: 译名（key 恒为 "en"，值为请求 lang 对应语言的译名）
+                                  additionalProperties:
+                                    type: string
+                              required: [tag]
+
+  /ajax/tags/illust/{id}/add:
+    post:
+      operationId: webAddIllustTag
+      summary: 给作品添加标签
+      description: |
+        一次添加一个标签，加多个就多调几次。需要登录 Cookie 与 CSRF token。
+      tags: [tag-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag:
+                  type: string
+                  description: 要添加的标签名
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/tags/illust/{id}/delete:
+    post:
+      operationId: webDeleteIllustTag
+      summary: 删除作品上的标签
+      description: |
+        只有 deletable=true 的标签能删（见 GET /ajax/tags/illust/{id}）。
+        需要登录 Cookie 与 CSRF token。
+      tags: [tag-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 插画 ID
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag:
+                  type: string
+                  description: 要删除的标签名
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/favorite_tags/save:
+    post:
+      operationId: webFavoriteTagsSave
+      summary: 保存收藏标签
+      description: |
+        网页版「お気に入りタグ」（收藏标签）的整体保存。
+        App API 无对应能力。需要登录 Cookie 与 CSRF token。
+      tags: [tag-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tags]
+              properties:
+                tags:
+                  type: array
+                  description: 收藏标签全量列表
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/stories/tag_stories:
+    get:
+      operationId: webTagStories
+      summary: 标签故事（tag stories）
+      description: |
+        标签关联的「标签故事」（ Stories）作品 ID 列表。
+        App API 无对应能力。
+      tags: [tag-web]
+      security: []
+      parameters:
+        - name: tag
+          in: query
+          required: true
+          description: 标签名
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 标签故事 ID 列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          tagStoryIds:
+                            type: array
+                            description: 标签故事作品 ID
+                            items:
+                              type: string
+                        additionalProperties: true

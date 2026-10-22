@@ -1,0 +1,284 @@
+# 屏蔽接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Block
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）屏蔽相关的 AJAX / RPC 接口，
+    完整收录开源实现中
+    出现的全部端点：账号级黑名单（アクセスブロック）的读取与写入、
+    静音（ミュート，只隐藏作品不出现在列表中）列表的读取与增删。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: block-web
+    description: 黑名单（アクセスブロック）
+  - name: mute-web
+    description: 静音（ミュート）
+paths:
+  /ajax/block/list:
+    get:
+      operationId: webBlockList
+      summary: 黑名单列表（アクセスブロック）
+      description: |
+        pixiv 账号级的访问屏蔽列表。带 target_id 时返回的 block_items
+        必含目标本人一条（isTarget=true），读它的 isBlocked 即知当前屏蔽态。
+        App API 无对应能力。需要网页 Cookie。
+      tags: [block-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: target_id
+          in: query
+          required: false
+          description: 关心的目标用户 ID（用于直接读该用户的屏蔽态）
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 黑名单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          block_items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                userId:
+                                  type: string
+                                label:
+                                  type: string
+                                  nullable: true
+                                iconUrl:
+                                  type: string
+                                enabled:
+                                  type: boolean
+                                isBlocked:
+                                  type: boolean
+                                isTarget:
+                                  type: boolean
+                                  description: 是否为 target_id 指定的目标本人
+                          has_more_blocks:
+                            type: boolean
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/block/save:
+    post:
+      operationId: webBlockSave
+      summary: 加入/移出黑名单
+      description: |
+        把某用户加入或移出账号级黑名单（アクセスブロック）。
+        需要登录 Cookie 与 CSRF token。
+      tags: [block-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, action]
+              properties:
+                user_id:
+                  type: string
+                  description: 目标用户 ID
+                action:
+                  type: string
+                  enum: [block, unblock]
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/mute/items:
+    get:
+      operationId: webMuteItems
+      summary: 静音列表
+      description: |
+        账号的静音（ミュート）项列表：被静音用户的标签/作品不再出现在
+        搜索与列表中。App API 无对应能力。需要登录 Cookie。
+      tags: [mute-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: context
+          in: query
+          required: true
+          description: 静音上下文（参考实现固定 user）
+          schema:
+            type: string
+            enum: [user]
+        - name: id
+          in: query
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 静音列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          mute_items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                type:
+                                  type: string
+                                value:
+                                  type: string
+                                  description: 静音对象值（如标签名）
+                                label:
+                                  type: string
+                                iconUrl:
+                                  type: string
+                                enabled:
+                                  type: boolean
+                                isMuted:
+                                  type: boolean
+                                listType:
+                                  type: string
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/mute/items/add:
+    post:
+      operationId: webMuteAdd
+      summary: 添加静音项
+      description: |
+        添加一条静音（ミュート）项。参考实现以 context=user + type=user
+        静音某用户。需要登录 Cookie 与 CSRF token。
+      tags: [mute-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [context, type, value]
+              properties:
+                context:
+                  type: string
+                  enum: [user]
+                  description: 静音上下文
+                type:
+                  type: string
+                  enum: [user]
+                  description: 静音对象类型
+                value:
+                  type: integer
+                  description: 用户 ID
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/mute/items/delete:
+    post:
+      operationId: webMuteDelete
+      summary: 删除静音项
+      description: |
+        删除一条静音（ミュート）项。需要登录 Cookie 与 CSRF token。
+      tags: [mute-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [context, type, value]
+              properties:
+                context:
+                  type: string
+                  enum: [user]
+                  description: 静音上下文
+                type:
+                  type: string
+                  enum: [user]
+                  description: 静音对象类型
+                value:
+                  type: integer
+                  description: 用户 ID
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'

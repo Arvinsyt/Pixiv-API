@@ -1,0 +1,73 @@
+# 构建并发布 VitePress 文档站到 GitHub Pages
+# 仓库 Settings → Pages 的 Source 需为 "GitHub Actions"(首次运行会自动开启)
+name: Deploy docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/configure-pages@v5
+        with:
+          # 仓库未开启 Pages 时自动启用(等效于 Settings → Pages 选择 GitHub Actions)
+          enablement: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build VitePress site
+        run: npm run docs:build
+        env:
+          # 项目站点挂在 /<仓库名>/ 子路径;若仓库名为 <user>.github.io 则用根路径 /
+          BASE: "${{ endsWith(github.event.repository.name, '.github.io') && '/' || format('/{0}/', github.event.repository.name) }}"
+
+      - name: Restructure clean URLs for GitHub Pages
+        working-directory: docs/.vitepress/dist
+        run: |
+          # GitHub Pages 不做无后缀 URL 重写,把 foo.html 重排成 foo/index.html,
+          # 让 /foo 经 301 落到目录索引页(cleanUrls 产物为平铺的 foo.html)
+          for f in *.html; do
+            case "$f" in index.html|404.html) continue;; esac
+            d="${f%.html}"
+            mkdir "$d"
+            mv "$f" "$d/index.html"
+          done
+
+      - name: Add .nojekyll
+        run: touch docs/.vitepress/dist/.nojekyll
+        # 防止 Jekyll 跳过 _shared/ 等下划线开头的目录
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

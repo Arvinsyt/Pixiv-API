@@ -1,0 +1,878 @@
+# 用户接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - User
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）用户（user）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的
+    全部端点：用户详情、按年月汇总的作品全集索引、关注列表、推荐用户、
+    扩展信息、按 ID 批量取作品、全量作品标签、按标签筛作品、
+    个人资料读写与关注操作（关注用户 / 关注分组 / 公开性切换）。
+    用户收藏列表相关端点见 `bookmark-web.yaml`。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: user-web
+    description: 用户查询接口（详情、作品索引、关注、推荐、标签筛选）
+  - name: user-web-write
+    description: 用户写操作（资料编辑、关注、分组）
+paths:
+  /ajax/user/{id}:
+    get:
+      operationId: webUserDetail
+      summary: 用户详情（Web 版）
+      description: |
+        网页版用户主页头部信息：关注/MyPixiv/屏蔽态、背景图、社交链接、
+        工作区与隐私字段等。与 App API 的 `/v1/user/detail` 相比
+        多出 canSendMessage、isBlocking 等 Web 侧字段。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: full
+          in: query
+          required: false
+          description: 1 时返回完整资料（含 region/gender/workspace 等隐私字段）
+          schema:
+            type: integer
+            enum: [0, 1]
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 用户详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        allOf:
+                          - $ref: '_shared.yaml#/components/schemas/WebUserItem'
+                          - type: object
+                            properties:
+                              followedBack:
+                                type: boolean
+                                description: 对方是否也关注了我
+                              canSendMessage:
+                                type: boolean
+                                description: 能否给该用户发私信
+                              background:
+                                type: object
+                                nullable: true
+                                properties:
+                                  url:
+                                    type: string
+                                  isPrivate:
+                                    type: boolean
+                              webpage:
+                                type: string
+                                nullable: true
+                              social:
+                                type: object
+                                description: 社交链接（键为平台名）
+                                additionalProperties:
+                                  type: object
+                                  properties:
+                                    url:
+                                      type: string
+                              region:
+                                type: object
+                                nullable: true
+                                description: 居住地（用户自行公开才有值）
+                              gender:
+                                type: object
+                                nullable: true
+                                description: 性别（用户自行公开才有值）
+                              workspace:
+                                type: object
+                                nullable: true
+                                description: 工作区（键为项目名，值为内容）
+                                additionalProperties:
+                                  type: string
+                                  nullable: true
+                              official:
+                                type: boolean
+                                description: 是否官方账号
+                              publisher:
+                                type: boolean
+                                description: 是否出版社等发行方账号
+
+  /ajax/user/{id}/profile/{type}:
+    get:
+      operationId: webUserProfile
+      summary: 用户作品全集索引（按年月汇总）
+      description: |
+        网页版用户主页的作品索引：以 年-月 为键的作品 ID 集合，
+        可一次拿到用户全部作品的 ID 分布。App API 只能逐页翻作品列表。
+        type=all/top 时直接返回全部索引；illusts/novels 可配合 `ids` 过滤。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: type
+          in: path
+          required: true
+          description: 索引类型
+          schema:
+            type: string
+            enum: [all, top, illusts, novels]
+        - name: ids
+          in: query
+          required: false
+          description: 指定类型为 illusts/novels 时的作品 ID 过滤（重复参数）
+          schema:
+            type: array
+            items:
+              type: integer
+      responses:
+        '200':
+          description: 作品索引（键为 "YYYY-MM"，值为作品 ID 数组）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          illusts:
+                            type: object
+                            description: '"YYYY-MM" -> 插画/漫画 ID 数组'
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: integer
+                          novels:
+                            type: object
+                            description: '"YYYY-MM" -> 小说 ID 数组'
+                            additionalProperties:
+                              type: array
+                              items:
+                                type: integer
+                        additionalProperties: true
+
+  /ajax/user/{id}/illusts:
+    get:
+      operationId: webUserIllustsByIds
+      summary: 按 ID 批量取用户的插画/漫画
+      description: |
+        用 GET /ajax/user/{id}/profile/{type} 拿到的 ID 批量取作品完整数据
+        （插画/漫画）。与下方 novels 端点配合实现「一次拉全画师全部作品」。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: ids
+          in: query
+          required: true
+          description: 作品 ID（重复参数）
+          schema:
+            type: array
+            items:
+              type: integer
+      responses:
+        '200':
+          description: 作品数据（键为作品 ID 的 map）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties:
+                          $ref: '_shared.yaml#/components/schemas/WebIllustItem'
+
+  /ajax/user/{id}/novels:
+    get:
+      operationId: webUserNovelsByIds
+      summary: 按 ID 批量取用户的小说
+      description: |
+        用 GET /ajax/user/{id}/profile/{type} 拿到的 ID 批量取小说完整数据。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: ids
+          in: query
+          required: true
+          description: 小说 ID（重复参数）
+          schema:
+            type: array
+            items:
+              type: integer
+      responses:
+        '200':
+          description: 小说数据（键为小说 ID 的 map）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties:
+                          $ref: '_shared.yaml#/components/schemas/WebNovelItem'
+
+  /ajax/user/{id}/works/latest:
+    get:
+      operationId: webUserWorksLatest
+      summary: 用户最新作品
+      description: |
+        网页版用户主页顶部展示的最新作品（插画/漫画/小说混合）。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 最新作品
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+
+  /ajax/user/{id}/meta:
+    get:
+      operationId: webUserMeta
+      summary: 用户页 SEO 元信息
+      description: |
+        用户主页的 SEO/OGP 元信息（title、description、ogp/twitter 等）。
+        一般用于服务端渲染，客户端场景较少使用。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 元信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          title:
+                            type: string
+                          description:
+                            type: string
+                          canonical:
+                            type: string
+                            nullable: true
+                          ogp:
+                            type: object
+                            additionalProperties: true
+                          twitter:
+                            type: object
+                            additionalProperties: true
+                        additionalProperties: true
+
+  /ajax/user/{id}/following:
+    get:
+      operationId: webUserFollowing
+      summary: 用户的关注列表（Web 版）
+      description: |
+        网页版用户主页的关注列表，offset/limit 翻页，rest 区分公开/私密。
+        与 App API 的 `/v1/user/following` 能力对应。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: true
+          description: 偏移量
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: true
+          description: 每页数量
+          schema:
+            type: integer
+        - name: rest
+          in: query
+          required: true
+          description: 可见性
+          schema:
+            type: string
+            enum: [show, hide]
+      responses:
+        '200':
+          description: 关注列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          users:
+                            type: array
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebUserItem'
+                          total:
+                            type: integer
+                        additionalProperties: true
+
+  /ajax/user/{id}/recommends:
+    get:
+      operationId: webUserRecommends
+      summary: 相关用户推荐
+      description: |
+        「相关用户」（相关画师推荐）列表，随推荐附带每位用户的近期作品。
+        与 App API 的 `/v1/user/related` 能力对应。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: userNum
+          in: query
+          required: false
+          description: 推荐用户数量
+          schema:
+            type: integer
+        - name: workNum
+          in: query
+          required: false
+          description: 每位用户附带的作品数量
+          schema:
+            type: integer
+        - name: isR18
+          in: query
+          required: false
+          description: 是否包含 R-18 作品
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: 推荐用户
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          users:
+                            type: array
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebUserItem'
+                          thumbnails:
+                            $ref: '_shared.yaml#/components/schemas/WebThumbnails'
+                        additionalProperties: true
+
+  /ajax/user/extra:
+    get:
+      operationId: webUserExtra
+      summary: 当前用户的扩展信息
+      description: |
+        当前登录用户的粉丝数/关注数/MyPixiv 数与主页背景图。
+        需要登录 Cookie。
+      tags: [user-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 扩展信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          background:
+                            type: string
+                            nullable: true
+                            description: 主页背景图 URL
+                          followers:
+                            type: integer
+                          following:
+                            type: integer
+                          mypixivCount:
+                            type: integer
+                        additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/user/{id}/{category}/tags:
+    get:
+      operationId: webUserWorkTags
+      summary: 画师的全量作品标签
+      description: |
+        某画师全部作品使用过的标签集合（网页版画师页「高级搜索」面板的数据源），
+        一次拿全、无分页，匿名可访问。App API 无对应能力。
+        注意服务端不按使用次数排序，tag_translation 仅带 lang 参数时有值。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: category
+          in: path
+          required: true
+          description: 作品类型（三种同构；另有插画+漫画合并的 illustmanga 变体）
+          schema:
+            type: string
+            enum: [illusts, manga, novels]
+        - name: all
+          in: query
+          required: false
+          description: 1 时比不带多出一小撮标签
+          schema:
+            type: integer
+            enum: [0, 1]
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 标签列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            tag:
+                              type: string
+                            tag_translation:
+                              type: string
+                              nullable: true
+                            tag_yomigana:
+                              type: string
+                              nullable: true
+                              description: 读音（假名）
+                            cnt:
+                              type: integer
+                              description: 使用次数（服务端不按它排序）
+                          required: [tag]
+
+  /ajax/user/{id}/{category}/tag:
+    get:
+      operationId: webUserWorksByTag
+      summary: 按标签筛选画师的作品
+      description: |
+        网页版画师页按 Tag 筛选作品（插画/漫画/小说三种同构），
+        offset/limit 翻页。App API 的用户作品列表无按标签过滤能力。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: category
+          in: path
+          required: true
+          description: 作品类型
+          schema:
+            type: string
+            enum: [illusts, manga, novels]
+        - name: tag
+          in: query
+          required: true
+          description: 标签名
+          schema:
+            type: string
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          description: 每页数量（网页固定 48）
+          schema:
+            type: integer
+        - name: sensitiveFilterMode
+          in: query
+          required: false
+          description: 敏感内容过滤口径（跟随账号设置）
+          schema:
+            type: string
+          example: userSetting
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 筛选结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          works:
+                            type: array
+                            description: 精简作品列表（小说为小说形状的精简对象）
+                            items:
+                              oneOf:
+                                - $ref: '_shared.yaml#/components/schemas/WebIllustItem'
+                                - $ref: '_shared.yaml#/components/schemas/WebNovelItem'
+                          total:
+                            type: integer
+                        additionalProperties: true
+
+  /ajax/user/tutorial/{id}:
+    get:
+      operationId: webUserTutorial
+      summary: 用户教程完成标记
+      description: |
+        读取指定用户的 Web 站新手教程（tutorial）完成状态。
+      tags: [user-web]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 教程状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          status:
+                            type: boolean
+                            description: 是否已完成
+                        additionalProperties: true
+
+  /ajax/following/user/details:
+    get:
+      operationId: webFollowingUserDetails
+      summary: 我对某用户的关注详情
+      description: |
+        当前登录用户对某用户的关注详情：公开/私密、分组标签。
+        需要登录 Cookie。
+      tags: [user-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          description: 目标用户 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 关注详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          user_id:
+                            type: integer
+                          user_name:
+                            type: string
+                          restrict:
+                            type: string
+                            description: 关注可见性（0=公开，1=私密）
+                          tags:
+                            type: array
+                            description: 关注分组标签
+                            items:
+                              type: string
+                        additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/my_profile:
+    get:
+      operationId: webMyProfile
+      summary: 当前用户的个人资料
+      description: |
+        当前登录用户在网页版资料页展示的全部资料。需要登录 Cookie。
+      tags: [user-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 个人资料
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/my_profile/update:
+    post:
+      operationId: webMyProfileUpdate
+      summary: 更新当前用户的个人资料
+      description: |
+        网页版资料页的保存操作，multipart 表单提交（头像等文件字段与
+        普通资料字段混排）。App API 侧对应 `/v1/user/profile/edit`。
+        需要登录 Cookie 与 CSRF token。
+      tags: [user-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              description: 资料字段（文本字段与头像等文件字段，键名以网页表单为准）
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /bookmark_add.php:
+    post:
+      operationId: webFollowUser
+      summary: 关注用户（bookmark user）
+      description: |
+        旧版表单端点：关注用户（pixiv 内部把「关注的人」记作用户的
+        bookmark）。与 App API 的 `/v1/user/follow/add` 能力对应，
+        可同时把关注放入指定分组标签。需要登录 Cookie 与 CSRF token。
+      tags: [user-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: true
+          description: 固定 json
+          schema:
+            type: string
+            enum: [json]
+        - name: type
+          in: query
+          required: true
+          description: 固定 user（关注用户）
+          schema:
+            type: string
+            enum: [user]
+        - name: mode
+          in: query
+          required: true
+          description: 固定 add
+          schema:
+            type: string
+            enum: [add]
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [user_id, restrict]
+              properties:
+                user_id:
+                  type: integer
+                  description: 要关注的用户 ID
+                tag:
+                  type: string
+                  description: 关注分组标签（可省略）
+                restrict:
+                  type: string
+                  enum: ['0', '1']
+                  description: 关注可见性（0=公开，1=私密）
+      responses:
+        '200':
+          description: |
+            操作结果。该旧版端点不走 AJAX 信封，
+            参考实现的类型标注为空结果，字段以实际响应为准。
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /rpc_group_setting.php:
+    post:
+      operationId: webGroupSetting
+      summary: 关注分组设置
+      description: |
+        旧版表单端点：管理关注用户的分组。参考实现只调用
+        mode=del + type=bookuser（把某用户移出分组）。
+        需要登录 Cookie 与 CSRF token。
+      tags: [user-web-write]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [mode, type, id]
+              properties:
+                mode:
+                  type: string
+                  enum: [del]
+                  description: 操作（参考实现仅用 del）
+                type:
+                  type: string
+                  enum: [bookuser]
+                  description: 固定 bookuser（关注用户分组）
+                id:
+                  type: integer
+                  description: 用户 ID
+      responses:
+        '200':
+          description: |
+            操作结果。该旧版端点不走 AJAX 信封，
+            参考实现标注返回 {type, user_id}。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  user_id:
+                    type: string
+                additionalProperties: true
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'

@@ -1,0 +1,402 @@
+# 插画接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Illust
+  version: 1.0.0
+  description: |
+    插画（illust）相关接口。
+
+    - 认证方式与公共请求头约定见 `_shared.yaml` 顶部说明（Bearer 令牌 + X-Client-Time/X-Client-Hash 等）。
+    - 漫画推荐接口见 manga.yaml；插画收藏增删见 bookmark.yaml；插画评论见 comment.yaml；
+      插画系列与追更见 series.yaml；插画搜索见 search.yaml。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: illust
+    description: 插画推荐、最新作品、排行、详情、相关作品、关注的新作品
+paths:
+  /v1/illust/recommended:
+    get:
+      operationId: getRecommend
+      summary: 推荐插画（首页推荐）
+      description: |
+        请求时固定携带 `filter=for_ios` 与 `include_ranking_label=true`。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_ios]
+          description: 固定 for_ios
+        - name: include_ranking_label
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+          description: 固定 true，响应中包含 ranking_label
+        - name: include_privacy_policy
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: 是否包含隐私政策文本
+        - name: include_ranking_illusts
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: |
+            是否在响应中附带排行榜作品列表（ranking_illusts 数组）。
+            部分客户端请求推荐页时携带 true。
+        - name: min_bookmark_id_for_recent_illust
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 翻页参数：上一页最后一条的 id（用于增量拉取）
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 推荐插画列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+                  - type: object
+                    properties:
+                      ranking_label:
+                        type: string
+                        nullable: true
+                        description: "排行榜标签文本（如 日间排行 #10）"
+                      ranking_illusts:
+                        type: array
+                        nullable: true
+                        description: 排行榜作品列表（include_ranking_illusts=true 时返回）
+                        items:
+                          $ref: '_shared.yaml#/components/schemas/Illust'
+                      contest_exists:
+                        type: boolean
+                        nullable: true
+                      privacy_policy:
+                        type: object
+                        nullable: true
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/illust/new:
+    get:
+      operationId: getIllustNew
+      summary: 最新作品（插画/漫画）
+      description: |
+        按发布时间倒序返回全站最新作品；`content_type=manga` 即最新漫画
+        （漫画共用本端点，见 manga.yaml 的说明）。翻页通过 `max_illust_id` 进行
+        （取上一页最后一条作品的 id），不支持 offset。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: content_type
+          in: query
+          required: true
+          description: 作品类型
+          schema:
+            type: string
+            enum: [illust, manga]
+            default: illust
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+        - name: max_illust_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 翻页参数：上一页最后一条作品的 id（取自 next_url）
+      responses:
+        '200':
+          description: 最新作品列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/illust/ranking:
+    get:
+      operationId: getIllustRanking
+      summary: 插画排行榜
+      description: |
+        请求时固定携带 `filter=for_android`。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+          description: 固定 for_android
+        - name: mode
+          in: query
+          required: true
+          description: 排行榜类型
+          schema:
+            type: string
+            enum:
+              [day, week, month, day_male, day_female, week_original, week_rookie, day_ai, day_r18, day_r18_ai, week_r18, week_r18g]
+            default: day
+        - name: date
+          in: query
+          required: false
+          description: 排行日期，格式 YYYY-M-D（可省略月/日的前导零）；不传或为空则取最新
+          schema:
+            type: string
+            example: "2026-10-21"
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 排行榜插画列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/illust/detail:
+    get:
+      operationId: getIllustDetail
+      summary: 插画详情
+      description: |
+        请求时固定携带 `filter=for_android`。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - $ref: '_shared.yaml#/components/parameters/IllustIdQuery'
+      responses:
+        '200':
+          description: 插画详情
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustDetailResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v2/illust/related:
+    get:
+      operationId: getIllustRelated
+      summary: 相关作品
+      description: |
+        请求时固定携带 `filter=for_android`。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - $ref: '_shared.yaml#/components/parameters/IllustIdQuery'
+        - name: seed_illust_ids
+          in: query
+          required: false
+          description: 额外的种子作品 ID（用于翻页去重）
+          schema:
+            type: array
+            items:
+              type: integer
+      responses:
+        '200':
+          description: 相关作品列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v2/illust/follow:
+    get:
+      operationId: getFollowIllusts
+      summary: 关注用户的新作品
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: restrict
+          in: query
+          required: true
+          description: 关注类型；all=全部，public=公开关注，private=悄悄关注
+          schema:
+            type: string
+            enum: [all, public, private]
+            default: all
+      responses:
+        '200':
+          description: 关注用户的新作品列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v2/illust/mypixiv:
+    get:
+      operationId: getMypixivIllusts
+      summary: 好 P 友（MyPixiv）的新作品
+      description: |
+        好 P 友（mypixiv，互关好友）的插画/漫画作品流。
+        无参数，翻页走 next_url，与其它 feed 一致。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      responses:
+        '200':
+          description: 好 P 友的新作品列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/ugoira/metadata:
+    get:
+      operationId: getUgoiraMetadata
+      summary: 动图（Ugoira）元数据
+      description: |
+        获取动图压缩包 URL 与逐帧延时信息。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/IllustIdQuery'
+      responses:
+        '200':
+          description: 动图元数据
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/UgoiraMetadataResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/illust/report/topic-list:
+    get:
+      operationId: getIllustReportTopicList
+      summary: 举报违规类型列表
+      description: |
+        举报流程第一步：返回服务端动态下发的违规类型列表
+        （topic_id + topic_title），供举报对话框选择。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      responses:
+        '200':
+          description: 违规类型列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustReportTopicsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v2/illust/report:
+    post:
+      operationId: postIllustReport
+      summary: 举报插画
+      description: |
+        举报流程第二步：把选中的 topic_id 与补充说明提交给服务端。
+        注意旧版 `/v1/illust/report`（固定 type_of_problem 字符串）已被
+        服务端废弃（一律 403），应使用本 v2 端点 + 动态 topic-list。
+      tags: [illust]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [illust_id, topic_id]
+              properties:
+                illust_id:
+                  type: integer
+                topic_id:
+                  type: integer
+                  description: 违规类型 ID（取自 GET /v1/illust/report/topic-list）
+                description:
+                  type: string
+                  description: 补充说明（选填）
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）

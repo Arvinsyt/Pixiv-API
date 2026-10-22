@@ -1,0 +1,2195 @@
+# 共享组件：各功能文件通过相对 $ref 引用本文件中的定义
+# 本文件本身也是一个合法的 OpenAPI 3.0.3 文档（仅包含 components）
+openapi: 3.0.3
+info:
+  title: Pixiv API - Shared Components
+  version: 1.0.0
+  description: |
+    Pixiv API / Web API 各功能文档共用的组件定义。
+
+    ## 分页
+
+    列表接口的响应均包含 `next_url` 字段，其值为下一页的完整 URL，
+    客户端直接对该 URL 发起 GET 请求即可获取下一页。
+    部分接口也支持 `offset` 查询参数。
+
+    ## 通用请求约定（App API：app-api.pixiv.net）
+
+    App API 的所有请求均需携带以下 HTTP 头（参照 PixivAndroidApp/5.0.166 的行为）：
+
+    | Header | 示例值 | 说明 |
+    |---|---|---|
+    | Authorization | Bearer xxxxxx | OAuth2 访问令牌（见 auth.yaml） |
+    | X-Client-Time | 2026-10-21T12:00:00+00:00 | 客户端本地时间，ISO 8601 格式 |
+    | X-Client-Hash | 32 位 MD5 | `MD5(X-Client-Time + HASH_SALT)`，HASH_SALT = `28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c` |
+    | App-OS | Android | 固定值 |
+    | App-OS-Version | Android 10.0 | |
+    | App-Version | 5.0.166 | |
+    | User-Agent | PixivAndroidApp/5.0.155 (Android 10.0; Pixel C) | |
+    | Accept-Language | zh-CN | |
+
+    ## 通用请求约定（Web API：www.pixiv.net AJAX / RPC）
+
+    Web API 为网页版（www.pixiv.net）的 `/ajax/...` 与 `/rpc...` 接口，
+    按 `*-web.yaml` 功能文档拆分，完整收录开源实现中出现的全部端点。
+    与 App API 的主要差异：
+
+    - 鉴权使用浏览器 Cookie（`PHPSESSID=..._...`）而非 OAuth Bearer 令牌
+      （见 securitySchemes/cookieAuth）；匿名可访问的端点标注 `security: []`；
+    - 响应统一包装为 `{ error, message, body }` 信封（见 components/schemas/WebApiEnvelope），
+      业务数据在 `body` 中；少数旧版 PHP 端点（ranking.php、rpc/cps.php、
+      rpc/notify_count.php 等）不走该信封，直接返回业务 JSON；
+    - 写操作（rpc / POST AJAX）额外需要 `x-csrf-token` 请求头
+      （见 components/parameters/WebCsrfTokenHeader）；
+    - 多数 AJAX 端点接受可选的 `lang` 查询参数（如 zh-cn、ja、en，
+      见 components/parameters/WebLangQuery）。
+
+    端点路径与参数依据开源实现整理，字段以实际响应为准。
+servers: []
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth_token 获取（见 auth.yaml）
+    provisionalAccountToken:
+      type: http
+      scheme: bearer
+      description: |
+        创建临时账号（provisional account）时使用的固定公开 Bearer 令牌：
+        `l-f9qZ0ZyqSwRyZs8-MymbtWBbSxmCu1pmbOlyisou8`
+        （硬编码于 Pixiv Android 客户端）
+    cookieAuth:
+      type: apiKey
+      in: header
+      name: Cookie
+      description: |
+        Web API（www.pixiv.net AJAX / RPC）使用的浏览器会话 Cookie
+        （如 `PHPSESSID=12345678_abCdEf...`），登录后获得，
+        以 `Cookie` 请求头携带。
+
+  parameters:
+    ClientTime:
+      name: X-Client-Time
+      in: header
+      required: true
+      description: 客户端本地时间，ISO 8601 格式（yyyy-MM-dd'T'HH:mm:ss+00:00）
+      schema:
+        type: string
+        example: "2026-10-21T12:00:00+00:00"
+    ClientHash:
+      name: X-Client-Hash
+      in: header
+      required: true
+      description: MD5(X-Client-Time + HASH_SALT)，HASH_SALT 为 28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c
+      schema:
+        type: string
+        example: "2d6bce8d1a7c8f3b0a4e5f6a7b8c9d0e"
+    Filter:
+      name: filter
+      in: query
+      description: 客户端平台过滤标记
+      schema:
+        type: string
+        enum: [for_android, for_ios]
+        default: for_android
+    Restrict:
+      name: restrict
+      in: query
+      required: true
+      description: 收藏/关注可见性
+      schema:
+        type: string
+        enum: [public, private]
+        default: public
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: 分页偏移量（也可直接使用响应中的 next_url）
+      schema:
+        type: integer
+        minimum: 0
+        example: 30
+    UserIdQuery:
+      name: user_id
+      in: query
+      required: true
+      description: 用户 ID
+      schema:
+        type: integer
+    UserIdQueryOptional:
+      name: user_id
+      in: query
+      required: false
+      description: 用户 ID；缺省时按登录用户自身处理
+      schema:
+        type: integer
+    IllustIdQuery:
+      name: illust_id
+      in: query
+      required: true
+      description: 插画（含漫画）作品 ID
+      schema:
+        type: integer
+    NovelIdQuery:
+      name: novel_id
+      in: query
+      required: true
+      description: 小说作品 ID
+      schema:
+        type: integer
+    CommentIdQuery:
+      name: comment_id
+      in: query
+      required: true
+      description: 评论 ID
+      schema:
+        type: integer
+    Word:
+      name: word
+      in: query
+      required: true
+      description: 搜索关键词
+      schema:
+        type: string
+    WebLangQuery:
+      name: lang
+      in: query
+      required: false
+      description: Web API 通用语言参数（影响 tag_translation 等本地化字段的取值，如 zh、zh-cn、ja、en）
+      schema:
+        type: string
+        example: zh
+    WebCsrfTokenHeader:
+      name: x-csrf-token
+      in: header
+      required: true
+      description: CSRF token（取自会话 Cookie 中的 CSRFTOKEN，或页面返回的 token），Web 写操作必带
+      schema:
+        type: string
+
+  headers: {}
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    Unauthorized:
+      description: 未授权（access_token 缺失、无效或过期）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    RateLimited:
+      description: 请求频率过高
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    EmptyBody:
+      description: 操作成功，响应体为空 JSON 对象 `{}`
+      content:
+        application/json:
+          schema:
+            type: object
+
+  schemas:
+    ErrorMessage:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            user_message:
+              type: string
+              nullable: true
+              description: 面向用户的错误信息
+            message:
+              type: string
+              nullable: true
+              description: 错误信息
+            reason:
+              type: string
+              nullable: true
+              description: 错误原因
+            user_message_details:
+              nullable: true
+          required: [message]
+
+    # ============ 基础对象 ============
+    Tag:
+      type: object
+      properties:
+        name:
+          type: string
+        translated_name:
+          type: string
+          nullable: true
+          description: 翻译后的标签名（跟随 Accept-Language）
+      required: [name]
+
+    ImageUrls:
+      type: object
+      description: 预览图 URL 集合
+      properties:
+        square_medium:
+          type: string
+          format: uri
+        medium:
+          type: string
+          format: uri
+        large:
+          type: string
+          format: uri
+      required: [square_medium, medium, large]
+
+    OriginalImageUrls:
+      type: object
+      description: meta_pages 中单页的图片 URL 集合（含原图）
+      properties:
+        square_medium:
+          type: string
+          format: uri
+        medium:
+          type: string
+          format: uri
+        large:
+          type: string
+          format: uri
+        original:
+          type: string
+          format: uri
+      required: [square_medium, medium, large, original]
+
+    ProfileImageUrls:
+      type: object
+      properties:
+        medium:
+          type: string
+          format: uri
+      required: [medium]
+
+    UserBrief:
+      type: object
+      description: 用户简要信息（出现在作品/评论等场景）
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        account:
+          type: string
+        profile_image_urls:
+          $ref: '#/components/schemas/ProfileImageUrls'
+        comment:
+          type: string
+          nullable: true
+        is_followed:
+          type: boolean
+          nullable: true
+      required: [id, name, account, profile_image_urls]
+
+    IllustSeriesNav:
+      type: object
+      description: 作品所属系列的简要信息
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          nullable: true
+      required: [id]
+
+    MetaSinglePage:
+      type: object
+      description: 单页作品的原图信息（多页作品时为空对象）
+      properties:
+        original_image_url:
+          type: string
+          format: uri
+          nullable: true
+
+    MetaPage:
+      type: object
+      properties:
+        image_urls:
+          $ref: '#/components/schemas/OriginalImageUrls'
+
+    Illust:
+      type: object
+      description: 插画/漫画作品
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+          enum: [illust, manga]
+          description: 作品类型
+        image_urls:
+          $ref: '#/components/schemas/ImageUrls'
+        caption:
+          type: string
+          description: 作品说明
+        restrict:
+          type: integer
+          description: 0 公开；1 非公开（仅自己可见的收藏作品列表场景）
+        user:
+          $ref: '#/components/schemas/UserBrief'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        tools:
+          type: array
+          items:
+            type: string
+          description: 使用的绘图工具
+        create_date:
+          type: string
+          format: date-time
+        page_count:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+        sanity_level:
+          type: integer
+          description: 健全度（2 全年龄 … 6 R-18 边缘）
+        x_restrict:
+          type: integer
+          description: 0 普通；1 R-18；2 R-18G
+        series:
+          allOf:
+            - $ref: '#/components/schemas/IllustSeriesNav'
+          nullable: true
+        meta_single_page:
+          $ref: '#/components/schemas/MetaSinglePage'
+        meta_pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetaPage'
+        total_view:
+          type: integer
+        total_bookmarks:
+          type: integer
+        is_bookmarked:
+          type: boolean
+          description: 当前登录用户是否已收藏
+        visible:
+          type: boolean
+        is_muted:
+          type: boolean
+        illust_ai_type:
+          type: integer
+          description: 0 非AI生成；1 AI生成；2 未分类
+        illust_book_style:
+          type: integer
+          nullable: true
+          description: 0 无；1 有（作品内嵌素材书/角色书风格）
+        total_comments:
+          type: integer
+          nullable: true
+      required:
+        [id, title, type, image_urls, caption, restrict, user, tags, tools, create_date, page_count, width, height, sanity_level, x_restrict, meta_single_page, meta_pages, total_view, total_bookmarks, is_bookmarked, visible, is_muted, illust_ai_type]
+      additionalProperties: true
+
+    IllustsResponse:
+      type: object
+      description: 插画列表通用响应（分页）
+      properties:
+        illusts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Illust'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+          description: 下一页完整 URL；为 null 表示没有更多数据
+      required: [illusts]
+      additionalProperties: true
+      example:
+        illusts: []
+        next_url: "https://app-api.pixiv.net/v1/illust/recommended?filter=for_ios&include_ranking_label=true&max_illust_id=12345"
+
+    IllustDetailResponse:
+      type: object
+      properties:
+        illust:
+          $ref: '#/components/schemas/Illust'
+      required: [illust]
+
+    Novel:
+      type: object
+      description: 小说作品
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        caption:
+          type: string
+        restrict:
+          type: integer
+        x_restrict:
+          type: integer
+          description: 0 普通；1 R-18；2 R-18G
+        is_original:
+          type: boolean
+        image_urls:
+          $ref: '#/components/schemas/ImageUrls'
+        create_date:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        page_count:
+          type: integer
+        text_length:
+          type: integer
+          description: 正文字符数
+        user:
+          $ref: '#/components/schemas/UserBrief'
+        series:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/IllustSeriesNav'
+        is_bookmarked:
+          type: boolean
+        total_bookmarks:
+          type: integer
+        total_view:
+          type: integer
+        visible:
+          type: boolean
+        total_comments:
+          type: integer
+        is_muted:
+          type: boolean
+        is_mypixiv_only:
+          type: boolean
+          description: 是否仅好 P 友可见
+        is_x_restricted:
+          type: boolean
+          description: 是否为 R-18/R-18G
+        novel_ai_type:
+          type: integer
+          description: 0 非AI生成；1 AI生成；2 未分类
+      required:
+        [id, title, caption, restrict, x_restrict, is_original, image_urls, create_date, tags, page_count, text_length, user, is_bookmarked, total_bookmarks, total_view, visible, total_comments, is_muted, is_mypixiv_only, is_x_restricted, novel_ai_type]
+      additionalProperties: true
+
+    NovelsResponse:
+      type: object
+      description: 小说列表通用响应（分页）
+      properties:
+        novels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Novel'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [novels]
+      additionalProperties: true
+
+    NovelDetailResponse:
+      type: object
+      properties:
+        novel:
+          $ref: '#/components/schemas/Novel'
+      required: [novel]
+
+    # ============ 用户 ============
+    Profile:
+      type: object
+      properties:
+        webpage:
+          type: string
+          nullable: true
+        gender:
+          type: string
+          nullable: true
+        birth:
+          type: string
+          nullable: true
+        birth_day:
+          type: string
+          nullable: true
+        birth_year:
+          type: integer
+          nullable: true
+        region:
+          type: string
+          nullable: true
+        address_id:
+          type: integer
+          nullable: true
+        country_code:
+          type: string
+          nullable: true
+        job:
+          type: string
+          nullable: true
+        job_id:
+          type: integer
+          nullable: true
+        total_follow_users:
+          type: integer
+        total_mypixiv_users:
+          type: integer
+        total_illusts:
+          type: integer
+        total_manga:
+          type: integer
+        total_novels:
+          type: integer
+        total_illust_bookmarks_public:
+          type: integer
+        total_illust_series:
+          type: integer
+        total_novel_series:
+          type: integer
+        background_image_url:
+          type: string
+          format: uri
+          nullable: true
+        twitter_account:
+          type: string
+          nullable: true
+        twitter_url:
+          type: string
+          format: uri
+          nullable: true
+        pawoo_url:
+          type: string
+          format: uri
+          nullable: true
+        is_premium:
+          type: boolean
+        is_using_custom_profile_image:
+          type: boolean
+
+    ProfilePublicity:
+      type: object
+      properties:
+        gender:
+          type: string
+        region:
+          type: string
+        birth_day:
+          type: string
+        birth_year:
+          type: string
+        job:
+          type: string
+        pawoo:
+          type: boolean
+
+    Workspace:
+      type: object
+      properties:
+        pc:
+          type: string
+        monitor:
+          type: string
+        tool:
+          type: string
+        scanner:
+          type: string
+        tablet:
+          type: string
+        mouse:
+          type: string
+        printer:
+          type: string
+        desktop:
+          type: string
+        music:
+          type: string
+        desk:
+          type: string
+        chair:
+          type: string
+        comment:
+          type: string
+        workspace_image_url:
+          type: string
+          format: uri
+          nullable: true
+
+    UserDetailResponse:
+      type: object
+      description: 用户详情
+      properties:
+        user:
+          $ref: '#/components/schemas/UserBrief'
+        profile:
+          $ref: '#/components/schemas/Profile'
+        profile_publicity:
+          $ref: '#/components/schemas/ProfilePublicity'
+        workspace:
+          $ref: '#/components/schemas/Workspace'
+      required: [user, profile, profile_publicity, workspace]
+
+    UserPreviewNovel:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        image_urls:
+          $ref: '#/components/schemas/ImageUrls'
+      required: [id, title, image_urls]
+
+    UserPreview:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserBrief'
+        illusts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Illust'
+        novels:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserPreviewNovel'
+        is_muted:
+          type: boolean
+      required: [user, illusts, novels, is_muted]
+
+    UserPreviewsResponse:
+      type: object
+      description: 用户预览列表（推荐用户/搜索用户/粉丝/关注中 共用结构）
+      properties:
+        user_previews:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserPreview'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [user_previews]
+      additionalProperties: true
+
+    FollowDetailResponse:
+      type: object
+      description: 关注状态详情
+      properties:
+        follow_detail:
+          type: object
+          properties:
+            is_followed:
+              type: boolean
+            restrict:
+              type: string
+              enum: [public, private]
+              description: 关注方式
+          required: [is_followed, restrict]
+      required: [follow_detail]
+
+    # ============ 评论 ============
+    CommentStamp:
+      type: object
+      properties:
+        stamp_id:
+          type: integer
+          nullable: true
+        stamp_url:
+          type: string
+          format: uri
+          nullable: true
+
+    Comment:
+      type: object
+      description: 评论
+      properties:
+        id:
+          type: integer
+        comment:
+          type: string
+        date:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/UserBrief'
+        parent_comment:
+          nullable: true
+          description: 被回复的父评论（含 id 为 0 的占位对象）
+        has_replies:
+          type: boolean
+          description: 是否存在回复
+        stamp:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CommentStamp'
+      required: [id, comment, date, user]
+
+    CommentResponse:
+      type: object
+      properties:
+        total_comments:
+          type: integer
+          nullable: true
+          description: 总评论数（仅第一页返回）
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [comments]
+
+    # ============ 搜索 / 标签 ============
+    AutoWords:
+      type: object
+      description: 搜索联想词
+      properties:
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+
+    TrendingTag:
+      type: object
+      description: 趋势标签条目
+      properties:
+        tag:
+          type: string
+        translated_name:
+          type: string
+          nullable: true
+        illust:
+          type: object
+          description: 该标签的代表作品（简化的 Illust 对象，至少含 id 与 image_urls）
+          properties:
+            id:
+              type: integer
+            image_urls:
+              $ref: '#/components/schemas/ImageUrls'
+          required: [id, image_urls]
+      required: [tag, illust]
+
+    TrendingTagsResponse:
+      type: object
+      properties:
+        trend_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendingTag'
+      required: [trend_tags]
+
+    BookmarkRangesResponse:
+      type: object
+      description: 搜索结果按收藏数的分段统计
+      properties:
+        bookmark_ranges:
+          type: array
+          description: 收藏数区间列表（用于搜索页的收藏数过滤）
+          items:
+            type: object
+            properties:
+              bookmark_num_min:
+                type: string
+                description: 区间下限（收藏数，数字字符串）
+              bookmark_num_max:
+                type: string
+                description: 区间上限（收藏数，数字字符串）
+            required: [bookmark_num_min, bookmark_num_max]
+      required: [bookmark_ranges]
+
+    # ============ 收藏 ============
+    BookmarkDetailResponse:
+      type: object
+      description: 收藏详情
+      properties:
+        bookmark_detail:
+          type: object
+          properties:
+            is_bookmarked:
+              type: boolean
+            tags:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  is_registered:
+                    type: boolean
+                    description: 该标签是否已被当前用户注册为收藏标签
+                required: [name, is_registered]
+            restrict:
+              type: string
+              enum: [public, private]
+              description: 当前收藏的可见性
+          required: [is_bookmarked, tags, restrict]
+      required: [bookmark_detail]
+
+    NovelBookmarkDetailResponse:
+      type: object
+      description: 小说收藏详情（结构同插画版 BookmarkDetailResponse）
+      properties:
+        bookmark_detail:
+          type: object
+          properties:
+            is_bookmarked:
+              type: boolean
+            tags:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  is_registered:
+                    type: boolean
+                    description: 该标签是否已被当前用户注册为收藏标签
+                required: [name, is_registered]
+            restrict:
+              type: string
+              enum: [public, private]
+              description: 当前收藏的可见性
+          required: [is_bookmarked, tags, restrict]
+      required: [bookmark_detail]
+
+    IllustBookmarkTagsResponse:
+      type: object
+      description: 用户的插画收藏标签列表
+      properties:
+        bookmark_tags:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              count:
+                type: integer
+                description: 使用该标签收藏的作品数
+            required: [name, count]
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [bookmark_tags]
+
+    NovelBookmarkTagsResponse:
+      type: object
+      description: 用户的小说收藏标签列表（结构同插画版 IllustBookmarkTagsResponse）
+      properties:
+        bookmark_tags:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              count:
+                type: integer
+                description: 使用该标签收藏的作品数
+            required: [name, count]
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [bookmark_tags]
+
+    # ============ 动图 / 小说正文 / 焦点 ============
+    UgoiraMetadataResponse:
+      type: object
+      description: 动图元数据
+      properties:
+        ugoira_metadata:
+          type: object
+          properties:
+            zip_urls:
+              type: object
+              properties:
+                medium:
+                  type: string
+                  format: uri
+                  description: 帧图片压缩包 URL（600x600 版）
+              required: [medium]
+            frames:
+              type: array
+              items:
+                type: object
+                properties:
+                  file:
+                    type: string
+                    description: 帧文件名（压缩包内路径，如 000000.jpg）
+                  delay:
+                    type: integer
+                    description: 该帧停留时间（毫秒）
+                required: [file, delay]
+          required: [zip_urls, frames]
+      required: [ugoira_metadata]
+
+    TextNovel:
+      type: object
+      description: 系列上一话/下一话的简要信息
+      properties:
+        id:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          nullable: true
+
+    NovelTextResponse:
+      type: object
+      description: 小说正文
+      properties:
+        novel_marker:
+          type: object
+          properties:
+            page:
+              type: integer
+              nullable: true
+              description: 上次阅读位置标记
+        novel_text:
+          type: string
+          description: 小说正文（含 Pixiv 站内标签语法，如 [newpage]、[chapter:]、[jump:]、[pixivimage:] 等）
+        series_prev:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TextNovel'
+        series_next:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TextNovel'
+      required: [novel_marker, novel_text]
+
+    SpotlightArticle:
+      type: object
+      description: Pixivision 文章
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        pure_title:
+          type: string
+        thumbnail:
+          type: string
+          format: uri
+        article_url:
+          type: string
+          format: uri
+        publish_date:
+          type: string
+          format: date-time
+        subcategory_label:
+          type: string
+          nullable: true
+      required: [id, title, pure_title, thumbnail, article_url, publish_date]
+
+    SpotlightArticlesResponse:
+      type: object
+      properties:
+        spotlight_articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpotlightArticle'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [spotlight_articles]
+
+    # ============ 系列 / 追更 ============
+    NovelSeriesDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        is_original:
+          type: boolean
+        is_concluded:
+          type: boolean
+          description: 系列是否完结
+        content_count:
+          type: integer
+          description: 系列包含的小说数
+        total_character_count:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserBrief'
+        display_text:
+          type: string
+        novel_ai_type:
+          type: integer
+        watchlist_added:
+          type: boolean
+          nullable: true
+          description: 当前用户是否已加入追更列表
+      required: [id, title, caption, is_original, is_concluded, content_count, total_character_count, user, display_text, novel_ai_type]
+
+    NovelSeriesResponse:
+      type: object
+      description: 小说系列详情
+      properties:
+        novel_series_detail:
+          $ref: '#/components/schemas/NovelSeriesDetail'
+        novel_series_first_novel:
+          $ref: '#/components/schemas/Novel'
+        novel_series_latest_novel:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Novel'
+        novels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Novel'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [novel_series_detail, novels]
+
+    UserNovelSeriesListResponse:
+      type: object
+      description: '`GET /v1/user/novel-series` 的响应：用户创建的小说系列列表'
+      properties:
+        novel_series_details:
+          type: array
+          description: 系列条目（结构较宽松，以实际响应为准）
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              title:
+                type: string
+              caption:
+                type: string
+                nullable: true
+              is_original:
+                type: boolean
+              is_concluded:
+                type: boolean
+              content_count:
+                type: integer
+                description: 系列包含的小说数
+              total_character_count:
+                type: integer
+                description: 系列总字数
+              create_date:
+                type: string
+                format: date-time
+              update_date:
+                type: string
+                format: date-time
+                nullable: true
+              user:
+                $ref: '#/components/schemas/UserBrief'
+            required: [id, title, content_count, user]
+            additionalProperties: true
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [novel_series_details]
+
+    IllustSeriesDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        caption:
+          type: string
+        height:
+          type: integer
+        width:
+          type: integer
+        series_work_count:
+          type: integer
+          description: 系列包含的作品数
+        create_date:
+          type: string
+          format: date-time
+        cover_image_urls:
+          type: object
+          properties:
+            medium:
+              type: string
+              format: uri
+              nullable: true
+        watchlist_added:
+          type: boolean
+          description: 当前用户是否已加入追更列表
+        user:
+          $ref: '#/components/schemas/UserBrief'
+      required: [id, title, series_work_count, cover_image_urls, watchlist_added]
+
+    IllustSeriesListResponse:
+      type: object
+      description: '`GET /v1/illust/series` 的响应：某插画系列内的全部作品'
+      properties:
+        illusts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Illust'
+        illust_series_detail:
+          $ref: '#/components/schemas/IllustSeriesDetail'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [illusts]
+
+    UserIllustSeriesListResponse:
+      type: object
+      description: '`GET /v1/user/illust-series` 的响应：用户创建的插画/漫画系列列表'
+      properties:
+        illust_series_details:
+          type: array
+          description: |
+            系列条目。结构与 IllustSeriesDetail 相同
+            （watchlist_added 等字段在该场景下可能不返回）。
+          items:
+            $ref: '#/components/schemas/IllustSeriesDetail'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [illust_series_details]
+
+    IllustSeriesContext:
+      type: object
+      properties:
+        content_order:
+          type: integer
+          nullable: true
+          description: 当前作品在系列中的序号
+        next:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Illust'
+        prev:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Illust'
+
+    IllustSeriesDetailResponse:
+      type: object
+      description: '`GET /v1/illust-series/illust` 的响应'
+      properties:
+        illust_series_context:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/IllustSeriesContext'
+        illust_series_detail:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/IllustSeriesDetail'
+
+    WatchSeriesUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        account:
+          type: string
+          nullable: true
+        profile_image_urls:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProfileImageUrls'
+      required: [id]
+
+    WatchSeries:
+      type: object
+      description: 追更列表中的系列条目（对应 watchlist_manga_model.dart / novel_watch_list_model.dart）
+      properties:
+        id:
+          type: integer
+          description: 系列 ID
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+          nullable: true
+          description: 封面图 URL
+        mask_text:
+          type: string
+          nullable: true
+          description: 防剧透遮罩文本
+        published_content_count:
+          type: integer
+          description: 已发布内容数
+        last_published_content_datetime:
+          type: string
+          format: date-time
+          nullable: true
+        latest_content_id:
+          type: integer
+          description: 最新一话的作品 ID
+        user:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/WatchSeriesUser'
+      required: [id, title, published_content_count, latest_content_id]
+
+    WatchlistResponse:
+      type: object
+      description: 追更列表（novel / manga 共用结构）
+      properties:
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/WatchSeries'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [series]
+
+    # ============ 设置 ============
+    ShowAIResponse:
+      type: object
+      description: AI 作品展示设置
+      properties:
+        show_ai:
+          type: boolean
+          description: 是否在推荐/搜索中展示 AI 生成作品
+      required: [show_ai]
+
+    RestrictedModeResponse:
+      type: object
+      properties:
+        is_restricted_mode_enabled:
+          type: boolean
+          description: 受限模式（R-18 内容过滤）是否开启
+      required: [is_restricted_mode_enabled]
+
+    # ============ 认证 ============
+    OAuthProfileImageUrls:
+      type: object
+      properties:
+        px_16x16:
+          type: string
+          format: uri
+        px_50x50:
+          type: string
+          format: uri
+        px_170x170:
+          type: string
+          format: uri
+      required: [px_16x16, px_50x50, px_170x170]
+
+    OAuthUser:
+      type: object
+      description: 令牌响应中的用户信息
+      properties:
+        profile_image_urls:
+          $ref: '#/components/schemas/OAuthProfileImageUrls'
+        id:
+          type: string
+          description: 用户 ID（注意：此接口返回字符串）
+        name:
+          type: string
+        account:
+          type: string
+        mail_address:
+          type: string
+          format: email
+        is_premium:
+          type: boolean
+        x_restrict:
+          type: integer
+        is_mail_authorized:
+          type: boolean
+        require_policy_agreement:
+          type: boolean
+          nullable: true
+      required: [profile_image_urls, id, name, account, mail_address, is_premium, x_restrict, is_mail_authorized]
+
+    TokenResponse:
+      type: object
+      description: '`POST /auth/token` 的成功响应'
+      properties:
+        access_token:
+          type: string
+          description: "访问令牌，用于调用 App API（Authorization: Bearer ...）"
+        expires_in:
+          type: integer
+          description: 令牌有效期（秒）
+        token_type:
+          type: string
+          example: bearer
+        scope:
+          type: string
+        refresh_token:
+          type: string
+          description: 刷新令牌，用于获取新的 access_token
+        device_token:
+          type: string
+          nullable: true
+        user:
+          $ref: '#/components/schemas/OAuthUser'
+      required: [access_token, expires_in, token_type, scope, refresh_token, user]
+
+    # ============ 账号管理 ============
+    CreateUserResponse:
+      type: object
+      description: 创建临时账号响应
+      properties:
+        error:
+          type: boolean
+        message:
+          type: string
+        body:
+          type: object
+          properties:
+            userAccount:
+              type: string
+              description: 生成的临时账号名
+            password:
+              type: string
+              description: 生成的密码
+            deviceToken:
+              type: string
+              description: 设备令牌
+          required: [userAccount, password, deviceToken]
+      required: [error, message, body]
+
+    AccountEditResponse:
+      type: object
+      description: 修改账号信息响应
+      properties:
+        error:
+          type: boolean
+        message:
+          type: string
+        body:
+          type: object
+          properties:
+            isSucceed:
+              type: boolean
+            validationErrors:
+              type: object
+              nullable: true
+              description: 校验错误详情
+          required: [isSucceed, validationErrors]
+      required: [error, message, body]
+
+    # ============ 评论贴纸 / 评论删除 ============
+    Stamp:
+      type: object
+      description: 评论表情贴纸
+      properties:
+        stamp_id:
+          type: integer
+        stamp_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [stamp_id]
+
+    StampsResponse:
+      type: object
+      description: '`GET /v1/stamps` 的响应：评论可用的表情贴纸目录（官方常驻约 40 个），发送贴纸评论时把 stamp_id 传给 comment/add'
+      properties:
+        stamps:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stamp'
+      required: [stamps]
+
+    # ============ 小说书签（しおり） ============
+    NovelMarkersResponse:
+      type: object
+      description: '`GET /v2/novel/markers` 的响应：当前用户设置了阅读书签的小说列表'
+      properties:
+        marked_novels:
+          type: array
+          items:
+            type: object
+            properties:
+              novel:
+                $ref: '#/components/schemas/Novel'
+              novel_marker:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                    description: 书签所在页码（1-based，对应正文中第 N 个 [newpage] 分页）
+                required: [page]
+            required: [novel, novel_marker]
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [marked_novels]
+
+    # ============ 消息通知 ============
+    NotificationContent:
+      type: object
+      description: 通知正文（text 含 HTML 加粗标记，客户端直接渲染）
+      properties:
+        text:
+          type: string
+          nullable: true
+        left_icon:
+          type: string
+          nullable: true
+        left_image:
+          type: string
+          format: uri
+          nullable: true
+        right_icon:
+          type: string
+          nullable: true
+        right_image:
+          type: string
+          format: uri
+          nullable: true
+
+    NotificationViewMore:
+      type: object
+      description: 分组通知的展开信息（非空表示该条是分组头，可调 view-more 拉子列表）
+      properties:
+        unread_exists:
+          type: boolean
+        title:
+          type: string
+          nullable: true
+
+    NotificationItem:
+      type: object
+      description: 单条通知
+      properties:
+        id:
+          type: integer
+        created_datetime:
+          type: string
+          format: date-time
+          nullable: true
+        type:
+          type: integer
+          description: 通知类型编号（抓包观察到的取值：7 收藏、8 关注；新类型可能随时出现）
+        content:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/NotificationContent'
+        view_more:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/NotificationViewMore'
+        target_url:
+          type: string
+          nullable: true
+          description: 跳转链接，恒为 pixiv:// scheme（illusts/users/novels）
+        is_read:
+          type: boolean
+      required: [id]
+
+    NotificationsResponse:
+      type: object
+      description: '`GET /v1/notification/list`、`GET /v1/notification/view-more` 的响应（共用结构）'
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationItem'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [notifications]
+
+    # ============ 公告（info） ============
+    InfoItem:
+      type: object
+      description: 单条公告
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        date:
+          type: string
+          nullable: true
+        url:
+          type: string
+          format: uri
+          nullable: true
+        is_recent:
+          type: boolean
+          description: 是否为近期公告
+      required: [id]
+
+    CategorizedInfo:
+      type: object
+      description: 按分类归组的公告集合
+      properties:
+        category_id:
+          type: integer
+        category_title:
+          type: string
+          nullable: true
+        info_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/InfoItem'
+      required: [category_id]
+
+    InfoLatestResponse:
+      type: object
+      description: '`GET /v1/info/latest` 的响应：首屏聚合公告，按分类分块、每块只给前几条，无 next_url'
+      properties:
+        categorized_infos:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorizedInfo'
+      required: [categorized_infos]
+
+    InfoListResponse:
+      type: object
+      description: '`GET /v1/info/list` 的响应：单一分类的完整公告列表（注意字段是单数 categorized_info）'
+      properties:
+        categorized_info:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CategorizedInfo'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [categorized_info]
+
+    # ============ 举报 ============
+    IllustReportTopicsResponse:
+      type: object
+      description: '`GET /v1/illust/report/topic-list` 的响应：举报时可用的违规类型列表（服务端动态下发）'
+      properties:
+        topic_list:
+          type: array
+          items:
+            type: object
+            properties:
+              topic_id:
+                type: integer
+              topic_title:
+                type: string
+                nullable: true
+            required: [topic_id]
+      required: [topic_list]
+
+    # ============ 约稿方案 ============
+    RequestPlanText:
+      type: object
+      description: 带译文的多语言文本（展示时优先 translation，回退 original）
+      properties:
+        original:
+          type: string
+          nullable: true
+        original_lang:
+          type: string
+          nullable: true
+        translation:
+          type: string
+          nullable: true
+
+    RequestPlanAcceptFlags:
+      type: object
+      description: 该方案可接受的约稿类型/条件
+      properties:
+        adult:
+          type: boolean
+        anonymous:
+          type: boolean
+        illust:
+          type: boolean
+        ugoira:
+          type: boolean
+        manga:
+          type: boolean
+        novel:
+          type: boolean
+
+    RequestPlanImageUrls:
+      type: object
+      properties:
+        cover:
+          type: string
+          format: uri
+          nullable: true
+        card:
+          type: string
+          format: uri
+          nullable: true
+          description: 列表卡片封面（800x400），缺失时回退 cover
+
+    RequestPlan:
+      type: object
+      description: 单个约稿方案（价格单位为日元，如 40000 = ¥40,000）
+      properties:
+        id:
+          type: integer
+        standard_price:
+          type: integer
+        accept_flags:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/RequestPlanAcceptFlags'
+        ai_type:
+          type: integer
+          description: 1 非 AI；2 AI 生成
+        title:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/RequestPlanText'
+        description:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/RequestPlanText'
+        image_urls:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/RequestPlanImageUrls'
+      required: [id]
+
+    UserRequestPlansResponse:
+      type: object
+      description: '`GET /v1/user/request-plans` 的响应：画师的约稿方案列表（单页返回，无 next_url）'
+      properties:
+        request_plans:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/RequestPlan'
+        user:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserBrief'
+        user_profile:
+          type: object
+          nullable: true
+          properties:
+            background_image_url:
+              type: string
+              format: uri
+              nullable: true
+
+    # ============ 搜索选项 ============
+    SearchOptionsResponse:
+      type: object
+      description: |
+        `GET /v1/search/options` 的响应：当前账号可选的搜索筛选选项，
+        illust / novel 两个 scope 各一份，结构基本对称
+        （illust 多 tool，novel 多 genre 与字数适用语言说明）。
+      properties:
+        illust:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SearchOptionsScope'
+        novel:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SearchOptionsScope'
+
+    SearchOptionsScope:
+      type: object
+      properties:
+        bookmark_ranges:
+          type: array
+          nullable: true
+          description: 可选的收藏数区间（"*" 为「不限」哨兵，客户端需自行降级处理）
+          items:
+            type: object
+            properties:
+              bookmark_num_min:
+                type: string
+              bookmark_num_max:
+                type: string
+            required: [bookmark_num_min, bookmark_num_max]
+        show_ai_condition:
+          type: boolean
+          description: 是否展示 AI 类型筛选
+        tool:
+          type: object
+          nullable: true
+          description: 创作工具候选（仅 illust scope）
+          properties:
+            options:
+              type: array
+              items:
+                type: string
+        genre:
+          type: object
+          nullable: true
+          description: 小说题材候选（仅 novel scope）
+          properties:
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  label:
+                    type: string
+                required: [id, label]
+        lang:
+          type: object
+          nullable: true
+          description: 作品语言候选
+          properties:
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  name:
+                    type: string
+                required: [code, name]
+        word_count_supported_languages:
+          type: string
+          nullable: true
+          description: 支持字数筛选的语言说明（仅 novel scope）
+
+    # ============ 收藏者列表 ============
+    BookmarkUsersResponse:
+      type: object
+      description: '`GET /v1/illust/bookmark/users`、`GET /v1/novel/bookmark/users` 的响应：收藏了该作品的用户列表（共用结构）'
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserBrief'
+        next_url:
+          type: string
+          format: uri
+          nullable: true
+      required: [users]
+
+    # ============ 用户详情 v2 ============
+    UserDetailV2Response:
+      type: object
+      description: '`GET /v2/user/detail` 的响应：结构同 v1，新增 disabled_links'
+      allOf:
+        - $ref: '#/components/schemas/UserDetailResponse'
+        - type: object
+          properties:
+            disabled_links:
+              type: array
+              nullable: true
+              description: 被服务端禁用的外链标识列表（空数组表示无）
+              items:
+                type: string
+
+    # ============ 资料编辑预设 ============
+    ProfilePresetsResponse:
+      type: object
+      description: '`GET /v1/user/profile/presets` 的响应：资料编辑表单的预设选项'
+      properties:
+        profile_presets:
+          type: object
+          properties:
+            addresses:
+              type: array
+              description: 地区候选（is_global=true 为「国际」）
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  is_global:
+                    type: boolean
+                required: [id, name]
+            countries:
+              type: array
+              description: 国家/地区候选
+              items:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  name:
+                    type: string
+                required: [code, name]
+            jobs:
+              type: array
+              description: 职业候选
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                required: [id, name]
+            default_profile_image_urls:
+              type: object
+              properties:
+                medium:
+                  type: string
+                  format: uri
+          required: [addresses, countries, jobs]
+      required: [profile_presets]
+
+    # ---------------- Web API（www.pixiv.net AJAX / RPC）共享模型 ----------------
+
+    WebApiEnvelope:
+      type: object
+      description: |
+        Web API AJAX 响应统一信封。业务数据在 `body` 中，结构随端点而异；
+        出错时 `error=true` 且 `message` 说明原因。
+        少数旧版 PHP 端点（ranking.php、rpc/cps.php、rpc/notify_count.php 等）
+        不走该信封，直接返回业务 JSON。
+      properties:
+        error:
+          type: boolean
+          description: 是否出错
+        message:
+          type: string
+          description: 出错时的错误信息
+        body:
+          description: 业务数据（结构随端点而异）
+      required: [error]
+    WebTagTranslation:
+      type: object
+      description: Web API 各列表接口随响应返回的标签译名表（键为标签名）
+      additionalProperties:
+        type: object
+        properties:
+          en:
+            type: string
+            nullable: true
+          ko:
+            type: string
+            nullable: true
+          zh:
+            type: string
+            nullable: true
+          zh_tw:
+            type: string
+            nullable: true
+          romaji:
+            type: string
+            nullable: true
+    WebIllustItem:
+      type: object
+      description: Web API 精简插画/漫画对象（各 thumbnails/works 列表中使用）
+      properties:
+        id:
+          type: string
+          description: 作品 ID
+        title:
+          type: string
+        illustType:
+          type: integer
+          description: 作品类型（0=插画，1=漫画，2=动图）
+          enum: [0, 1, 2]
+        xRestrict:
+          type: integer
+          description: 内容分级（0=全年龄，1=R-18，2=R-18G）
+        sl:
+          type: integer
+        url:
+          type: string
+          description: 封面图 URL
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        profileImageUrl:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        pageCount:
+          type: integer
+        isBookmarkable:
+          type: boolean
+        bookmarkData:
+          type: object
+          nullable: true
+          description: 当前用户的收藏态（id/private），未收藏为 null
+        alt:
+          type: string
+        createDate:
+          type: string
+        updateDate:
+          type: string
+        isUnlisted:
+          type: boolean
+        isMasked:
+          type: boolean
+        aiType:
+          type: integer
+          description: 0=非 AI，2=AI 生成
+      additionalProperties: true
+    WebNovelItem:
+      type: object
+      description: Web API 精简小说对象（各 thumbnails/works 列表中使用）
+      properties:
+        id:
+          type: string
+          description: 小说 ID
+        title:
+          type: string
+        genre:
+          type: string
+          description: 题材名
+        xRestrict:
+          type: integer
+          description: 内容分级（0=全年龄，1=R-18，2=R-18G）
+        restrict:
+          type: integer
+        url:
+          type: string
+          description: 封面图 URL
+        tags:
+          type: array
+          items:
+            type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        profileImageUrl:
+          type: string
+        textCount:
+          type: integer
+          description: 字数
+        wordCount:
+          type: integer
+          description: 单词数（非 CJK 语种按单词计）
+        readingTime:
+          type: integer
+          description: 预计阅读用时（分钟）
+        useWordCount:
+          type: boolean
+          description: 该语种是否按「单词数」而非「字数」计
+        description:
+          type: string
+        isBookmarkable:
+          type: boolean
+        bookmarkData:
+          type: object
+          nullable: true
+        bookmarkCount:
+          type: integer
+        isOriginal:
+          type: boolean
+        marker:
+          description: 当前用户的阅读标记（页码等），无为 null
+          nullable: true
+        createDate:
+          type: string
+        updateDate:
+          type: string
+        isMasked:
+          type: boolean
+        aiType:
+          type: integer
+        seriesId:
+          type: string
+          nullable: true
+        seriesTitle:
+          type: string
+          nullable: true
+        seriesContentOrder:
+          type: integer
+          nullable: true
+          description: 在系列中的序号
+        isUnlisted:
+          type: boolean
+        visibilityScope:
+          type: integer
+        language:
+          type: string
+          description: 作品语言
+      additionalProperties: true
+    WebNovelSeriesItem:
+      type: object
+      description: Web API 精简小说系列对象
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        cover:
+          type: object
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        xRestrict:
+          type: integer
+        isOriginal:
+          type: boolean
+        genre:
+          type: string
+        createDateTime:
+          type: string
+        updateDateTime:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        profileImageUrl:
+          type: string
+        bookmarkCount:
+          type: integer
+        isOneshot:
+          type: boolean
+        caption:
+          type: string
+        isConcluded:
+          type: boolean
+          description: 是否完结
+        episodeCount:
+          type: integer
+        publishedEpisodeCount:
+          type: integer
+        latestPublishDateTime:
+          type: string
+        latestEpisodeId:
+          type: string
+        isWatched:
+          type: boolean
+          description: 当前用户是否追更中
+        isNotifying:
+          type: boolean
+          description: 追更通知是否开启
+        restrict:
+          type: integer
+        textLength:
+          type: integer
+        wordCount:
+          type: integer
+        readingTime:
+          type: integer
+        publishedTextLength:
+          type: integer
+        publishedWordCount:
+          type: integer
+        publishedReadingTime:
+          type: integer
+        useWordCount:
+          type: boolean
+        aiType:
+          type: integer
+      additionalProperties: true
+    WebUserItem:
+      type: object
+      description: Web API 精简用户对象（各 users 列表中使用）
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        image:
+          type: string
+          description: 头像 URL
+        imageBig:
+          type: string
+        comment:
+          type: string
+        premium:
+          type: boolean
+        isFollowed:
+          type: boolean
+        isMypixiv:
+          type: boolean
+        isBlocking:
+          type: boolean
+        followedBack:
+          type: boolean
+        partial:
+          type: integer
+        background:
+          type: string
+          nullable: true
+        commission:
+          nullable: true
+          description: 约稿（commission）信息
+      additionalProperties: true
+    WebThumbnails:
+      type: object
+      description: Web API 列表接口按类型归组的作品数据（键为作品 ID 的 map 或数组，随端点而异）
+      properties:
+        illust:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebIllustItem'
+        novel:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebNovelItem'
+        novelSeries:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebNovelSeriesItem'
+        novelDraft:
+          type: array
+          items:
+            type: object
+        collection:
+          type: array
+          items:
+            type: object
+      additionalProperties: true
+    WebZoneConfig:
+      type: object
+      description: Web API 响应附带的广告/统计区域配置（一般可忽略）
+      additionalProperties:
+        type: object
+        properties:
+          url:
+            type: string

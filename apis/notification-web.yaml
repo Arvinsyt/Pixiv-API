@@ -1,0 +1,94 @@
+# 通知接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Notification
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）通知（notification）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的全部端点：
+    消息/通知列表与未读计数。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）与通用 `lang`
+    参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: notification-web
+    description: 通知查询接口（列表、未读数）
+paths:
+  /ajax/notification:
+    get:
+      operationId: webNotification
+      summary: 消息通知列表
+      description: |
+        当前用户的消息/通知（点赞、收藏、关注、评论等动态）。
+        与 App API 的 `/v1/notification/list` 能力对应，但聚合形态为
+        Web 版时间线。需要登录 Cookie。
+      tags: [notification-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: darkTheme
+          in: query
+          required: false
+          description: 暗色主题标记（影响返回资源样式，非业务参数）
+          schema:
+            type: integer
+            enum: [0, 1]
+      responses:
+        '200':
+          description: 通知列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+        '401':
+          description: 未登录（error=true，message 说明原因）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /rpc/notify_count.php:
+    get:
+      operationId: webNotifyCount
+      summary: 通知未读数
+      description: |
+        各类通知的未读计数。旧版 PHP 端点，响应不走 AJAX 信封，
+        直接返回业务 JSON。
+      tags: [notification-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: op
+          in: query
+          required: false
+          description: 操作类型（参考实现固定 count_unread）
+          schema:
+            type: string
+          enum: [count_unread]
+      responses:
+        '200':
+          description: 未读计数
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  popboard:
+                    type: integer
+                    description: 弹幕板（popboard）类通知未读数
+                required: [popboard]
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'

@@ -1,0 +1,754 @@
+# 收藏接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Bookmark
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）收藏（bookmark）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的全部端点：
+    插画/小说收藏的添加、删除、批量移除、可见性批量修改、批量打标签、
+    标签改名进度，用户收藏列表、收藏标签统计与合集收藏。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）、写操作的
+    `x-csrf-token` 与通用 `lang` 参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: illust-bookmark-web
+    description: 插画收藏（增删改、标签、进度）
+  - name: novel-bookmark-web
+    description: 小说收藏（增删改、标签、进度）
+  - name: bookmark-web-list
+    description: 收藏列表与统计（用户收藏、收藏标签、合集）
+paths:
+  /ajax/illusts/bookmarks/add:
+    post:
+      operationId: webBookmarkAddIllust
+      summary: 收藏插画（Web 版）
+      description: |
+        网页版收藏，可同时写收藏备注与打收藏标签。
+        与 App API 的 `/v2/illust/bookmark/add` 能力对应。
+        需要登录 Cookie 与 CSRF token。
+      tags: [illust-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [illust_id, comment, tags]
+              properties:
+                illust_id:
+                  type: string
+                  description: 作品 ID
+                restrict:
+                  type: integer
+                  enum: [0, 1]
+                  description: 可见性（0=公开，1=私密）
+                comment:
+                  type: string
+                  description: 收藏备注（可空字符串）
+                tags:
+                  type: array
+                  description: 收藏标签
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 收藏结果（body 含 last_bookmark_id / stacc_status_id，均为字符串数字）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          last_bookmark_id:
+                            type: string
+                            description: 收藏 ID（取消收藏时使用）
+                          stacc_status_id:
+                            type: string
+                            description: StaccFeed 动态 ID
+        '400':
+          description: 参数缺失或 CSRF token 无效
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illusts/bookmarks/delete:
+    post:
+      operationId: webBookmarkDeleteIllust
+      summary: 取消收藏插画（单个）
+      description: |
+        按收藏 ID 取消单个收藏（bookmark_id 取自添加时返回的
+        last_bookmark_id 或收藏列表的 bookmarkData.id）。
+        需要登录 Cookie 与 CSRF token。
+      tags: [illust-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [bookmark_id]
+              properties:
+                bookmark_id:
+                  type: string
+                  description: 收藏 ID
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illusts/bookmarks/remove:
+    post:
+      operationId: webBookmarkRemoveIllusts
+      summary: 取消收藏插画（批量）
+      description: |
+        网页版收藏管理页的批量取消。App API 只能逐个取消。
+        需要登录 Cookie 与 CSRF token。
+      tags: [illust-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookmark_ids]
+              properties:
+                bookmark_ids:
+                  type: array
+                  description: 收藏 ID 列表
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illusts/bookmarks/edit_restrict:
+    post:
+      operationId: webBookmarkEditRestrictIllusts
+      summary: 批量修改插画收藏可见性
+      description: |
+        把一批收藏改为公开/私密。App API 无对应能力。
+        需要登录 Cookie 与 CSRF token。
+      tags: [illust-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookmark_ids, bookmark_restrict]
+              properties:
+                bookmark_ids:
+                  type: array
+                  description: 收藏 ID 列表
+                  items:
+                    type: integer
+                bookmark_restrict:
+                  type: string
+                  enum: [private, public]
+                  description: 目标可见性
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illusts/bookmarks/add_tags:
+    post:
+      operationId: webBookmarkAddTagsIllusts
+      summary: 批量给插画收藏打标签
+      description: |
+        给一批收藏追加收藏标签（网页版收藏管理页操作）。
+        App API 只能在收藏时带上标签。需要登录 Cookie 与 CSRF token。
+      tags: [illust-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookmark_ids, tags]
+              properties:
+                bookmark_ids:
+                  type: array
+                  description: 收藏 ID 列表
+                  items:
+                    type: integer
+                tags:
+                  type: array
+                  description: 要追加的收藏标签
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/illusts/bookmarks/rename_tag_progress:
+    get:
+      operationId: webBookmarkRenameTagProgressIllust
+      summary: 插画收藏标签改名进度
+      description: |
+        收藏标签改名（合并/重命名）是服务端异步任务，此接口查询进行状态。
+        需要登录 Cookie。
+      tags: [illust-bookmark-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 改名进度
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          isInProgress:
+                            type: boolean
+                            description: 是否正在进行
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novels/bookmarks/add:
+    post:
+      operationId: webBookmarkAddNovel
+      summary: 收藏小说（Web 版）
+      description: |
+        网页版小说收藏。与 App API 的 `/v2/novel/bookmark/add` 能力对应。
+        注意参考实现的作品字段名沿用 illust_id。
+        需要登录 Cookie 与 CSRF token。
+      tags: [novel-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [illust_id, restrict, comment, tags]
+              properties:
+                illust_id:
+                  type: string
+                  description: 小说 ID（参考实现沿用 illust_id 字段名）
+                restrict:
+                  type: integer
+                  enum: [0, 1]
+                  description: 可见性（0=公开，1=私密）
+                comment:
+                  type: string
+                  description: 收藏备注（可空字符串）
+                tags:
+                  type: array
+                  description: 收藏标签
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 收藏结果（body 含 last_bookmark_id 等，字段以实际响应为准）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+        '400':
+          description: 参数缺失或 CSRF token 无效
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novels/bookmarks/delete:
+    post:
+      operationId: webBookmarkDeleteNovel
+      summary: 取消收藏小说（单个）
+      description: |
+        按收藏 ID 取消单个小说收藏。需要登录 Cookie 与 CSRF token。
+      tags: [novel-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [book_id, del]
+              properties:
+                book_id:
+                  type: string
+                  description: 收藏 ID
+                del:
+                  type: string
+                  enum: ['1']
+                  description: 固定 1
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novels/bookmarks/remove:
+    post:
+      operationId: webBookmarkRemoveNovels
+      summary: 取消收藏小说（批量）
+      description: |
+        网页版收藏管理页的批量取消。App API 只能逐个取消。
+        需要登录 Cookie 与 CSRF token。
+      tags: [novel-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookmark_ids]
+              properties:
+                bookmark_ids:
+                  type: array
+                  description: 收藏 ID 列表
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novels/bookmarks/edit_restrict:
+    post:
+      operationId: webBookmarkEditRestrictNovels
+      summary: 批量修改小说收藏可见性
+      description: |
+        把一批收藏改为公开/私密。App API 无对应能力。
+        需要登录 Cookie 与 CSRF token。
+      tags: [novel-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookmark_ids, bookmark_restrict]
+              properties:
+                bookmark_ids:
+                  type: array
+                  description: 收藏 ID 列表
+                  items:
+                    type: integer
+                bookmark_restrict:
+                  type: string
+                  enum: [private, public]
+                  description: 目标可见性
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novels/bookmarks/add_tags:
+    post:
+      operationId: webBookmarkAddTagsNovels
+      summary: 批量给小说收藏打标签
+      description: |
+        给一批收藏追加收藏标签。需要登录 Cookie 与 CSRF token。
+      tags: [novel-bookmark-web]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/WebCsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookmark_ids, tags]
+              properties:
+                bookmark_ids:
+                  type: array
+                  description: 收藏 ID 列表
+                  items:
+                    type: integer
+                tags:
+                  type: array
+                  description: 要追加的收藏标签
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 操作结果（error=false 表示成功）
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/novels/bookmarks/rename_tag_progress:
+    get:
+      operationId: webBookmarkRenameTagProgressNovel
+      summary: 小说收藏标签改名进度
+      description: |
+        小说收藏标签改名（合并/重命名）的异步任务状态。
+        需要登录 Cookie。
+      tags: [novel-bookmark-web]
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 改名进度
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          isInProgress:
+                            type: boolean
+                            description: 是否正在进行
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+
+  /ajax/user/{id}/{category}/bookmarks:
+    get:
+      operationId: webUserBookmarks
+      summary: 用户的收藏列表（Web 版）
+      description: |
+        网页版用户收藏页数据：按收藏标签过滤、offset/limit 翻页、
+        rest 区分公开/私密。与 App API 的 `/v1/user/bookmarks/illust`、
+        `/v1/user/bookmarks/novel` 能力对应，但支持按标签过滤
+        （App API 无对应参数）。
+      tags: [bookmark-web-list]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: category
+          in: path
+          required: true
+          description: 收藏类型
+          schema:
+            type: string
+            enum: [illusts, novels]
+        - name: tag
+          in: query
+          required: true
+          description: 收藏标签（空字符串为全部）
+          schema:
+            type: string
+        - name: offset
+          in: query
+          required: true
+          description: 偏移量
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: true
+          description: 每页数量
+          schema:
+            type: integer
+        - name: rest
+          in: query
+          required: true
+          description: 可见性
+          schema:
+            type: string
+            enum: [show, hide]
+      responses:
+        '200':
+          description: 收藏列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          works:
+                            type: array
+                            description: 收藏的作品（illusts 为插画形状、novels 为小说形状）
+                            items:
+                              oneOf:
+                                - $ref: '_shared.yaml#/components/schemas/WebIllustItem'
+                                - $ref: '_shared.yaml#/components/schemas/WebNovelItem'
+                          total:
+                            type: integer
+                        additionalProperties: true
+
+  /ajax/user/{id}/{type}/bookmark/tags:
+    get:
+      operationId: webUserBookmarkTags
+      summary: 用户的收藏标签统计
+      description: |
+        用户收藏页左侧的收藏标签列表与计数，公开/私密分组返回。
+        与 App API 的 `/v1/user/bookmark-tags/illust`、
+        `/v1/user/bookmark-tags/novel` 能力对应，但一次同时返回两组。
+      tags: [bookmark-web-list]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: type
+          in: path
+          required: true
+          description: 收藏类型
+          schema:
+            type: string
+            enum: [illusts, novels]
+      responses:
+        '200':
+          description: 收藏标签统计
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          public:
+                            type: array
+                            description: 公开收藏的标签
+                            items:
+                              type: object
+                              properties:
+                                tag:
+                                  type: string
+                                cnt:
+                                  type: integer
+                                  description: 收藏数
+                          private:
+                            type: array
+                            description: 私密收藏的标签
+                            items:
+                              type: object
+                              properties:
+                                tag:
+                                  type: string
+                                cnt:
+                                  type: integer
+                                  description: 收藏数
+                          tooManyBookmark:
+                            type: boolean
+                            description: 收藏总数过多（统计被截断）
+                          tooManyBookmarkTags:
+                            type: boolean
+                            description: 标签数过多（统计被截断）
+
+  /ajax/user/{id}/collections/bookmarks:
+    get:
+      operationId: webUserCollectionBookmarks
+      summary: 用户的合集收藏列表
+      description: |
+        用户收藏的合集（collection，多作品打包）列表。
+        App API 无任何合集能力。offset/limit 翻页。
+      tags: [bookmark-web-list]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 用户 ID
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: true
+          description: 偏移量
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: true
+          description: 每页数量
+          schema:
+            type: integer
+        - name: rest
+          in: query
+          required: true
+          description: 可见性
+          schema:
+            type: string
+            enum: [show, hide]
+      responses:
+        '200':
+          description: 合集收藏列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          works:
+                            type: array
+                            description: 收藏的合集
+                            items:
+                              type: object
+                              additionalProperties: true
+                          total:
+                            type: integer
+                          tagTranslation:
+                            $ref: '_shared.yaml#/components/schemas/WebTagTranslation'
+                          thumbnails:
+                            $ref: '_shared.yaml#/components/schemas/WebThumbnails'
+                          users:
+                            type: array
+                            items:
+                              $ref: '_shared.yaml#/components/schemas/WebUserItem'
+                        additionalProperties: true

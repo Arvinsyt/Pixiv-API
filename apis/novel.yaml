@@ -1,0 +1,395 @@
+# 小说接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Novel
+  version: 1.0.0
+  description: |
+    小说相关接口。
+
+    小说的收藏增删、用户收藏列表见 bookmark.yaml；小说评论见 comment.yaml；
+    小说系列与追更见 series.yaml；小说搜索见 search.yaml。
+
+    认证方式与公共请求头约定见 `_shared.yaml` 顶部说明。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: novel
+    description: 小说推荐、最新、排行、详情、正文、关注的新作品、阅读书签
+paths:
+  /v1/novel/recommended:
+    get:
+      operationId: getNovelRecommended
+      summary: 推荐小说
+      description: |
+        请求时固定携带 `include_privacy_policy=true`、`filter=for_android`、`include_ranking_novels=true`。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: include_privacy_policy
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - name: include_ranking_novels
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [true]
+        - name: max_novel_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 翻页参数（取自 next_url）
+        - name: already_recommended
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 已推荐过的小说 ID 列表（逗号分隔），用于"不感兴趣"类刷新
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 推荐小说列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+                  - type: object
+                    properties:
+                      privacy_policy:
+                        type: object
+                        nullable: true
+                      ranking_novels:
+                        type: array
+                        nullable: true
+                        description: 排行榜小说（include_ranking_novels=true 时返回）
+                        items:
+                          $ref: '_shared.yaml#/components/schemas/Novel'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/novel/new:
+    get:
+      operationId: getNovelNew
+      summary: 最新小说
+      description: |
+        按发布时间倒序返回全站最新小说。
+        翻页通过 `max_novel_id` 进行（取上一页最后一条小说的 id），不支持 offset。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+        - name: max_novel_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 翻页参数：上一页最后一条小说的 id（取自 next_url）
+      responses:
+        '200':
+          description: 最新小说列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/novel/ranking:
+    get:
+      operationId: getNovelRanking
+      summary: 小说排行榜
+      description: |
+        请求时固定携带 `filter=for_android`。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - name: mode
+          in: query
+          required: true
+          description: 排行榜类型
+          schema:
+            type: string
+            enum: [day, week, day_male, day_female, week_ai, week_ai_r18, day_r18, week_r18, week_r18g]
+            default: day
+        - name: date
+          in: query
+          required: false
+          description: 排行日期，格式 YYYY-M-D；不传则取最新
+          schema:
+            type: string
+            example: "2026-10-21"
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 排行榜小说列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v2/novel/detail:
+    get:
+      operationId: getNovelDetail
+      summary: 小说详情
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/NovelIdQuery'
+      responses:
+        '200':
+          description: 小说详情
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelDetailResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/novel/text:
+    get:
+      operationId: getNovelText
+      summary: 小说正文
+      description: |
+        返回小说正文纯文本（含 Pixiv 站内标签语法）、
+        阅读进度标记与系列上一话/下一话信息。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/NovelIdQuery'
+      responses:
+        '200':
+          description: 小说正文
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelTextResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /webview/v2/novel:
+    get:
+      operationId: webviewNovel
+      summary: 小说 WebView 页面
+      description: |
+        返回小说阅读页 HTML（供 WebView 渲染，
+        含评论计数与阅读进度上传逻辑）。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: id
+          in: query
+          required: true
+          description: 小说 ID
+          schema:
+            type: integer
+        - name: viewer_version
+          in: query
+          required: false
+          description: 阅读器版本标记，部分客户端固定传 20221031_ai（支持 AI 小说阅读）
+          schema:
+            type: string
+          example: "20221031_ai"
+      responses:
+        '200':
+          description: 小说阅读页 HTML
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/novel/follow:
+    get:
+      operationId: getNovelFollow
+      summary: 关注用户的新小说
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: restrict
+          in: query
+          required: true
+          description: 关注类型；all=全部，public=公开关注，private=悄悄关注
+          schema:
+            type: string
+            enum: [all, public, private]
+            default: all
+      responses:
+        '200':
+          description: 关注用户的新小说列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/novel/mypixiv:
+    get:
+      operationId: getMypixivNovels
+      summary: 好 P 友（MyPixiv）的新小说
+      description: |
+        好 P 友（mypixiv，互关好友）的新小说流，与
+        `/v2/illust/mypixiv` 同族。无参数，翻页走 next_url。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      responses:
+        '200':
+          description: 好 P 友的新小说列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v2/novel/markers:
+    get:
+      operationId: getNovelMarkers
+      summary: 小说书签列表
+      description: |
+        返回当前用户设置了阅读书签（しおり）的小说列表，
+        每条带书签所在页码。翻页通过 next_url。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      responses:
+        '200':
+          description: 书签列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelMarkersResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/novel/marker/add:
+    post:
+      operationId: postNovelMarkerAdd
+      summary: 添加/更新小说书签
+      description: |
+        pixiv 原版书签（しおり）。page 为 1-based 的 [newpage] 分页序号；
+        同一部小说只有一个书签，重复添加直接覆盖页码。
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [novel_id, page]
+              properties:
+                novel_id:
+                  type: integer
+                page:
+                  type: integer
+                  description: 书签页码（1-based，对应正文中第 N 个 [newpage] 分页）
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '400':
+          $ref: '_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/novel/marker/delete:
+    post:
+      operationId: postNovelMarkerDelete
+      summary: 删除小说书签
+      tags: [novel]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [novel_id]
+              properties:
+                novel_id:
+                  type: integer
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）

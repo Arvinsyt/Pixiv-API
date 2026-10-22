@@ -1,0 +1,228 @@
+# Pixivision 焦点与杂项接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Spotlight & Misc
+  version: 1.0.0
+  description: |
+    Pixivision 焦点文章、登录前 Walkthrough 插画、直播列表、
+    消息通知与公告接口，
+
+    认证方式与公共请求头约定见 `_shared.yaml` 顶部说明。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: spotlight
+    description: Pixivision 焦点文章
+  - name: misc
+    description: 其他
+paths:
+  /v1/spotlight/articles:
+    get:
+      operationId: getSpotlightArticles
+      summary: Pixivision 焦点文章
+      description: |
+        请求时固定携带 `filter=for_android`。
+        返回 Pixivision 特辑文章列表（category 为 all 时返回全部）。
+      tags: [spotlight]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [for_android]
+        - name: category
+          in: query
+          required: true
+          description: 文章分类
+          schema:
+            type: string
+            enum: [all, illustration, manga, novel, justforfun]
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 焦点文章列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/SpotlightArticlesResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/walkthrough/illusts:
+    get:
+      operationId: walkthroughIllusts
+      summary: 登录引导页插画
+      description: |
+        返回登录页展示的示例插画，
+        无需登录即可访问。
+      tags: [misc]
+      security: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+      responses:
+        '200':
+          description: 引导页插画列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustsResponse'
+
+  /v1/live/list:
+    get:
+      operationId: getLiveList
+      summary: 直播列表
+      description: |
+        Pixiv Sketch 直播列表（list_type 默认 popular）。
+        响应结构未经完整记录，字段以实际响应为准。
+      tags: [misc]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: list_type
+          in: query
+          required: false
+          description: 列表类型
+          schema:
+            type: string
+            default: popular
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 直播列表（字段以实际响应为准）
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/notification/list:
+    get:
+      operationId: getNotificationList
+      summary: 消息通知列表
+      description: |
+        当前用户的消息/通知（点赞、收藏、关注、评论等动态），
+        App API 侧的通知入口。带 view_more 的条目是分组头，
+        展开子列表调 `GET /v1/notification/view-more`。
+      tags: [misc]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      responses:
+        '200':
+          description: 通知列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NotificationsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/notification/view-more:
+    get:
+      operationId: getNotificationViewMore
+      summary: 展开分组通知
+      description: |
+        把某个分组头通知（view_more 不为空的 NotificationItem）摊平，
+        返回该分组的完整子列表。
+      tags: [misc]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: notification_id
+          in: query
+          required: true
+          description: 分组头通知的 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 分组内的通知子列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NotificationsResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/info/latest:
+    get:
+      operationId: getInfoLatest
+      summary: 最新公告（首屏聚合）
+      description: |
+        按分类分块返回近期公告，每块只给前几条（"全部 + 各分类的近期 N 条"），
+        无 next_url；单分类完整列表用 `GET /v1/info/list`。
+      tags: [misc]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      responses:
+        '200':
+          description: 聚合公告
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/InfoLatestResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/info/list:
+    get:
+      operationId: getInfoList
+      summary: 单分类公告列表
+      description: |
+        返回指定分类的完整公告列表，支持 next_url 翻页
+        （注意响应字段是单数 categorized_info，与 latest 的复数不同）。
+      tags: [misc]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: cid
+          in: query
+          required: true
+          description: 分类 ID（取自 latest 响应的 category_id）
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 分类公告列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/InfoListResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）

@@ -1,0 +1,381 @@
+# 搜索接口 · Web（www.pixiv.net AJAX / RPC）
+openapi: 3.0.3
+info:
+  title: Pixiv Web API - Search
+  version: 1.0.0
+  description: |
+    Pixiv Web 站（www.pixiv.net）搜索（search）相关的 AJAX / RPC 接口，
+    完整收录开源实现中出现的
+    全部端点：网页版作品/标签搜索、搜索联想、输入候选（cps）与
+    移动版（touch）搜索。
+
+    网页版搜索支持比 App API 更多维度的过滤（画幅比例、工具、AI 类型、
+    作品语言等）；novels 搜索另有收藏数/字数/阅读用时区间、题材与
+    按系列单位显示（gs）等 App API 没有或参数名不同的过滤。
+
+    鉴权（Cookie）、响应信封（`{error, message, body}`）与通用 `lang`
+    参数见 `_shared.yaml` 的 Web API 约定。
+servers:
+  - url: https://www.pixiv.net
+    description: Pixiv Web 站
+tags:
+  - name: search-web
+    description: 搜索接口（作品/标签搜索、联想、候选）
+paths:
+  /ajax/search/{type}/{keyword}:
+    get:
+      operationId: webSearch
+      summary: 网页版搜索
+      description: |
+        网页版搜索。type=tags 为标签搜索（返回标签与计数），其余为作品搜索。
+        匿名（无网页 Cookie）也能调通，但 R-18 结果拿不到、
+        order=popular_d（会员热门排序）被服务端静默忽略。
+      tags: [search-web]
+      security: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: 搜索类型
+          schema:
+            type: string
+            enum: [artworks, illustrations, manga, novels, top, tags]
+        - name: keyword
+          in: path
+          required: true
+          description: 关键词（需 URL 编码）
+          schema:
+            type: string
+        - name: word
+          in: query
+          required: false
+          description: 关键词（与 path 等价的查询串形式）
+          schema:
+            type: string
+        - name: order
+          in: query
+          required: false
+          description: 排序（date_d=新顺，date=旧顺；popular_d=会员热门排序，非会员被服务端静默忽略）
+          schema:
+            type: string
+            enum: [date_d, date, popular_d]
+            default: date_d
+        - name: mode
+          in: query
+          required: false
+          description: 内容分级过滤
+          schema:
+            type: string
+            enum: [all, safe, r18]
+        - name: s_mode
+          in: query
+          required: false
+          description: |
+            匹配模式（s_tag=标签部分一致，s_tag_only=完全一致，
+            s_tag_full=完全匹配，s_tc=文本；novels 搜索的 s_tc 为正文，
+            与插画侧的标题简介不同）
+          schema:
+            type: string
+            enum: [s_tag, s_tag_only, s_tag_full, s_tc]
+        - name: type
+          in: query
+          required: false
+          description: 作品类型过滤（artworks 搜索时）
+          schema:
+            type: string
+            enum: [all, illust_and_ugoira, illust, manga, ugoira]
+        - name: wlt
+          in: query
+          required: false
+          description: 最小宽度（artworks 搜索）；novels 搜索时为单词数下限（同名异义）
+          schema:
+            type: integer
+        - name: wgt
+          in: query
+          required: false
+          description: 最大宽度（artworks 搜索）；novels 搜索时为单词数上限（同名异义）
+          schema:
+            type: integer
+        - name: hlt
+          in: query
+          required: false
+          description: 最小高度
+          schema:
+            type: integer
+        - name: hgt
+          in: query
+          required: false
+          description: 最大高度
+          schema:
+            type: integer
+        - name: ratio
+          in: query
+          required: false
+          description: 画幅比例过滤（0=全部，0.5=横图，-0.5=竖图）
+          schema:
+            type: number
+            enum: [0, 0.5, -0.5]
+        - name: tool
+          in: query
+          required: false
+          description: 创作工具过滤
+          schema:
+            type: string
+        - name: scd
+          in: query
+          required: false
+          description: 起始日期，格式 YYYY-MM-DD
+          schema:
+            type: string
+        - name: ecd
+          in: query
+          required: false
+          description: 结束日期，格式 YYYY-MM-DD
+          schema:
+            type: string
+        - name: ai_type
+          in: query
+          required: false
+          description: AI 作品过滤（1=过滤掉 AI 生成作品）
+          schema:
+            type: integer
+            enum: [1]
+        - name: work_lang
+          in: query
+          required: false
+          description: 作品语言过滤
+          schema:
+            type: string
+        - name: gs
+          in: query
+          required: false
+          description: |
+            小说搜索的「シリーズ単位で表示」（按系列单位显示）：
+            gs=1 时同系列多章塌缩为一条系列卡。
+            App API 的 /v1/search/novel 无对应参数，为 Web 独有。
+          schema:
+            type: integer
+          enum: [1]
+        - name: blt
+          in: query
+          required: false
+          description: 收藏数下限（novels 搜索）
+          schema:
+            type: integer
+        - name: bgt
+          in: query
+          required: false
+          description: 收藏数上限（novels 搜索）
+          schema:
+            type: integer
+        - name: tlt
+          in: query
+          required: false
+          description: 正文字数下限（novels 搜索，以 3 个字符为一单位）
+          schema:
+            type: integer
+        - name: tgt
+          in: query
+          required: false
+          description: 正文字数上限（novels 搜索，以 3 个字符为一单位）
+          schema:
+            type: integer
+        - name: rlt
+          in: query
+          required: false
+          description: 阅读用时下限，分钟（novels 搜索）
+          schema:
+            type: integer
+        - name: rgt
+          in: query
+          required: false
+          description: 阅读用时上限，分钟（novels 搜索）
+          schema:
+            type: integer
+        - name: original_only
+          in: query
+          required: false
+          description: 仅显示原创小说（novels 搜索）
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: genre
+          in: query
+          required: false
+          description: 小说题材 ID（novels 搜索）
+          schema:
+            type: integer
+        - name: replaceable_only
+          in: query
+          required: false
+          description: 仅显示可翻译（AI 译制）的小说（novels 搜索）
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: p
+          in: query
+          required: false
+          description: 页码，从 1 开始
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 搜索结果（body 内 illustManga/novels 等字段随 type 而异）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+
+  /ajax/search/suggestion:
+    get:
+      operationId: webSearchSuggestion
+      summary: 搜索页基础联想数据
+      description: |
+        搜索页初始化时拉取的联想基础数据（热门标签等）。
+      tags: [search-web]
+      security: []
+      parameters:
+        - name: mode
+          in: query
+          required: true
+          description: 内容分级（参考实现固定 all）
+          schema:
+            type: string
+            enum: [all]
+      responses:
+        '200':
+          description: 联想基础数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        additionalProperties: true
+
+  /rpc/cps.php:
+    get:
+      operationId: webSearchCandidates
+      summary: 搜索框输入候选（cps）
+      description: |
+        搜索框输入时的实时候选（completion）：标签候选、译名与热度。
+        旧版 PHP 端点，响应不走 AJAX 信封，直接返回业务 JSON。
+      tags: [search-web]
+      security: []
+      parameters:
+        - name: keyword
+          in: query
+          required: true
+          description: 输入中的关键词
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 候选列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  candidates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tag_name:
+                          type: string
+                          description: 标签名
+                        tag_translation:
+                          type: string
+                          description: 标签译名
+                        access_count:
+                          type: string
+                          description: 热度（字符串数字）
+                        type:
+                          type: string
+                      required: [tag_name]
+                required: [candidates]
+
+  /touch/ajax/search/illusts:
+    get:
+      operationId: webTouchSearchIllusts
+      summary: 移动版搜索（touch）
+      description: |
+        移动版网页（/touch）的插画搜索，带 pixpedia 标签百科摘要与相关标签。
+        开源客户端以固定参数调用：include_meta=1、type=all、
+        csw=0、s_mode=s_tag_full。匿名可用。
+      tags: [search-web]
+      security: []
+      parameters:
+        - name: word
+          in: query
+          required: true
+          description: 搜索关键词
+          schema:
+            type: string
+        - name: include_meta
+          in: query
+          required: false
+          description: 固定 1（带标签百科等 meta）
+          schema:
+            type: integer
+          enum: [1]
+        - name: type
+          in: query
+          required: false
+          description: 作品类型（参考实现固定 all）
+          schema:
+            type: string
+        - name: csw
+          in: query
+          required: false
+          description: 参考实现固定 0
+          schema:
+            type: integer
+        - name: s_mode
+          in: query
+          required: false
+          description: 匹配模式（参考实现固定 s_tag_full）
+          schema:
+            type: string
+        - $ref: '_shared.yaml#/components/parameters/WebLangQuery'
+      responses:
+        '200':
+          description: 搜索结果（移动版结构）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/WebApiEnvelope'
+                  - type: object
+                    properties:
+                      body:
+                        type: object
+                        properties:
+                          illusts:
+                            type: array
+                            description: 结果作品列表（移动版精简对象）
+                            items:
+                              type: object
+                              additionalProperties: true
+                          total:
+                            type: integer
+                          lastPage:
+                            type: integer
+                            description: 最后一页页码
+                          meta:
+                            type: object
+                            description: 标签相关 meta（tag、translatedTag、pixpedia 百科摘要、relatedTags 等）
+                            additionalProperties: true
+                        additionalProperties: true

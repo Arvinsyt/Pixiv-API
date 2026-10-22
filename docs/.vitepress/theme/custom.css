@@ -1,0 +1,250 @@
+/* ------------------------------------------------------------------
+ * Pixiv API 文档站 · 设计令牌
+ * 品牌锚点:Pixiv 蓝 #0096FA(装饰/强调),正文链接用加深版保证对比度
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* 字体:拉丁展示字用于 wordmark / hero / 数字;正文走系统中日韩字体栈 */
+  --font-display: 'Baloo 2', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
+  --vp-font-family-base:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC',
+    sans-serif;
+  --vp-font-family-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas,
+    'Courier New', monospace;
+
+  /* 画布 */
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f5faff;
+  --vp-c-bg-soft: #f3f8fd;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-up: #ffffff;
+
+  /* 文字 */
+  --vp-c-text-1: #1b2b3d;
+  --vp-c-text-2: #47607c;
+  --vp-c-text-3: #7189a3;
+
+  /* 线 */
+  --vp-c-divider: #e3ecf5;
+  --vp-c-gutter: #e3ecf5;
+
+  /* 品牌:1=链接色(达标 AA),3=Pixiv 蓝装饰色 */
+  --vp-c-brand-1: #0271df;
+  --vp-c-brand-2: #0180f2;
+  --vp-c-brand-3: #0096fa;
+  --vp-c-brand-soft: rgba(0, 150, 250, 0.13);
+
+  /* 按钮:药丸圆角,主按钮底色取深蓝保证白字对比度 */
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-bg: #0271df;
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-hover-bg: #0260c2;
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: #ffffff;
+  --vp-button-brand-active-bg: #0260c2;
+  --vp-button-alt-border: #d5e3f0;
+  --vp-button-alt-bg: transparent;
+  --vp-button-alt-text: var(--vp-c-text-1);
+  --vp-button-alt-hover-border: var(--vp-c-brand-3);
+  --vp-button-alt-hover-bg: transparent;
+  --vp-button-alt-hover-text: var(--vp-c-brand-1);
+  --vp-button-brand-radius: 999px;
+  --vp-button-alt-radius: 999px;
+
+  /* hero 点阵画布 */
+  --vp-c-dot: rgba(2, 113, 223, 0.16);
+
+  /* HeroArt 插画配色 */
+  --art-card: #ffffff;
+  --art-line: rgba(120, 175, 225, 0.5);
+  --art-sky-deep: #bce0fa;
+  --art-sky-soft: #e0f1fd;
+  --art-sky-top: #cde9ff;
+  --art-sky-btm: #98d4ff;
+  --art-blue: #0096fa;
+  --art-blue-soft: rgba(0, 150, 250, 0.12);
+  --art-bar: #d9e7f3;
+}
+
+.dark {
+  --vp-c-bg: #0d1522;
+  --vp-c-bg-alt: #0a111c;
+  --vp-c-bg-soft: #16233a;
+  --vp-c-bg-elv: #131f33;
+  --vp-c-bg-up: #182741;
+
+  --vp-c-text-1: #e8f1fa;
+  --vp-c-text-2: #a9bcd2;
+  --vp-c-text-3: #74889f;
+
+  --vp-c-divider: #1f2f4a;
+  --vp-c-gutter: #1f2f4a;
+
+  --vp-c-brand-1: #58b6ff;
+  --vp-c-brand-2: #3ea5ff;
+  --vp-c-brand-3: #0096fa;
+  --vp-c-brand-soft: rgba(0, 150, 250, 0.17);
+
+  --vp-button-alt-border: #2a3d5c;
+
+  --vp-c-dot: rgba(62, 184, 255, 0.14);
+
+  --art-card: #16233a;
+  --art-line: rgba(120, 170, 220, 0.28);
+  --art-sky-deep: #1e3a5c;
+  --art-sky-soft: #24466b;
+  --art-sky-top: #1d3e63;
+  --art-sky-btm: #2e6fa8;
+  --art-blue: #3eb8ff;
+  --art-blue-soft: rgba(62, 184, 255, 0.18);
+  --art-bar: #33507a;
+}
+
+::selection {
+  background: var(--vp-c-brand-soft);
+}
+
+/* ---------------------------------------------------------------- 顶栏 */
+
+.VPNavBarTitle .title {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------- 首页 hero */
+
+/* 品牌名:纯墨色 + 展示字,不用默认渐变字 */
+.VPHero .name.clip,
+.VPHero .clip {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: currentColor;
+  color: var(--vp-c-text-1);
+  font-family: var(--font-display);
+}
+
+.VPHero .image {
+  max-width: 330px;
+}
+
+.VPHero .image-container {
+  max-width: none;
+}
+
+/* 默认的光晕背景换成“画布点阵” */
+.VPHero .image-bg {
+  position: absolute;
+  left: -24px;
+  top: -20px;
+  width: calc(100% + 48px);
+  height: calc(100% + 40px);
+  transform: none;
+  border-radius: 30px;
+  background-image: radial-gradient(var(--vp-c-dot) 1.3px, transparent 1.3px);
+  background-size: 15px 15px;
+  filter: none;
+}
+
+@media (min-width: 960px) {
+  .VPHero .tagline {
+    max-width: 30em;
+    line-height: 1.8;
+  }
+}
+
+/* ---------------------------------------------------------------- 首页 features */
+
+/* 模块卡片:emoji 图标改为品牌浅蓝圆角块,接口数用展示字 + 品牌色 */
+.VPFeature .icon {
+  border-radius: 12px;
+  background: var(--vp-c-brand-soft);
+}
+
+.VPFeature .title {
+  font-weight: 600;
+}
+
+.VPFeature .details {
+  line-height: 1.7;
+}
+
+.VPFeature .details b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--vp-c-brand-1);
+}
+
+.VPFeature .details code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+}
+
+/* ---------------------------------------------------------------- 文档排版 */
+
+.vp-doc h1 {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.vp-doc h2 {
+  font-weight: 700;
+  padding-top: 28px;
+}
+
+.vp-doc h3 {
+  font-weight: 600;
+}
+
+/* “源文件 apis/*.yaml” 提示行 */
+.vp-doc blockquote {
+  margin: 16px 0;
+  padding: 10px 18px;
+  border-left: 3px solid var(--vp-c-brand-3);
+  border-radius: 0 10px 10px 0;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-text-2);
+  font-size: 14.5px;
+}
+
+/* 行内代码:淡蓝底,不用品牌字色,避免满页蓝字 */
+.vp-doc :not(pre) > code {
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-text-1);
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-weight: 500;
+}
+
+/* 表格:字段表是本站的主要形态,给表头明显的浅色底 */
+.vp-doc table {
+  margin: 18px 0;
+  font-size: 14px;
+}
+
+.vp-doc th {
+  background: var(--vp-c-bg-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.vp-doc tr {
+  border-top: none;
+}
+
+.vp-doc td,
+.vp-doc th {
+  border: 1px solid var(--vp-c-divider);
+  padding: 8px 14px;
+  line-height: 1.65;
+}
+
+.vp-doc tr:hover td {
+  background: var(--vp-c-bg-soft);
+}

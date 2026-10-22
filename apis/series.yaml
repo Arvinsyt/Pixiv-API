@@ -1,0 +1,366 @@
+# 系列与追更接口（app-api.pixiv.net）
+openapi: 3.0.3
+info:
+  title: Pixiv App API - Series & Watchlist
+  version: 1.0.0
+  description: |
+    系列（series）与追更（watchlist）相关接口，
+
+    - 插画/漫画系列：`/v1/illust/series`、`/v1/illust-series/illust`、`/v1/user/illust-series`
+    - 小说系列：`/v2/novel/series`、`/v1/user/novel-series`
+    - 追更列表：`/v1/watchlist/novel`、`/v1/watchlist/manga`
+
+    认证方式与公共请求头约定见 `_shared.yaml` 顶部说明。
+servers:
+  - url: https://app-api.pixiv.net
+    description: Pixiv App API
+tags:
+  - name: illust-series
+    description: 插画/漫画系列
+  - name: novel-series
+    description: 小说系列
+  - name: watchlist
+    description: 追更列表（系列更新订阅）
+paths:
+  /v1/illust/series:
+    get:
+      operationId: illustSeries
+      summary: 插画系列内的作品列表
+      description: |
+        请求时携带 `filter=for_ios` 与 `illust_series_id` 参数。
+        翻页支持两种方式：`offset` 偏移量，或 `last_order`
+        游标（上一页最后一条的序号，取自 next_url；小说系列同款游标）。
+      tags: [illust-series]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: illust_series_id
+          in: query
+          required: true
+          description: 插画系列 ID
+          schema:
+            type: integer
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+        - name: last_order
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 翻页游标：上一页最后一条的序号（取自 next_url）
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 系列内作品列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustSeriesListResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/illust-series/illust:
+    get:
+      operationId: illustSeriesIllust
+      summary: 作品所属的系列信息
+      description: |
+        查询某插画属于哪个系列，
+        及其在系列中的前后作品（context）。
+      tags: [illust-series]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: illust_id
+          in: query
+          required: true
+          description: 插画 ID
+          schema:
+            type: integer
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+      responses:
+        '200':
+          description: 系列信息与上下文
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/IllustSeriesDetailResponse'
+        '404':
+          description: 作品不属于任何系列
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/ErrorMessage'
+
+  /v1/user/illust-series:
+    get:
+      operationId: userIllustSeries
+      summary: 用户的插画系列列表
+      description: |
+        查询某用户创建的全部插画/漫画系列
+        （不含系列内的作品，作品列表见 `/v1/illust/series`）。
+      tags: [illust-series]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/UserIdQuery'
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 用户的插画系列列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/UserIllustSeriesListResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v2/novel/series:
+    get:
+      operationId: novelSeries
+      summary: 小说系列详情与作品列表
+      description: |
+        翻页同样请求本端点。
+        返回系列详情（含是否完结、追更状态）、首话/最新话信息与全部小说列表。
+      tags: [novel-series]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: series_id
+          in: query
+          required: true
+          description: 小说系列 ID
+          schema:
+            type: integer
+        - name: last_order
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 翻页参数：上一页最后一条的 order（取自 next_url）
+      responses:
+        '200':
+          description: 小说系列详情
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/NovelSeriesResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/user/novel-series:
+    get:
+      operationId: userNovelSeries
+      summary: 用户的小说系列列表
+      description: |
+        查询某用户创建的全部小说系列
+        （系列详情与作品列表见 `/v2/novel/series`）。
+      tags: [novel-series]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - $ref: '_shared.yaml#/components/parameters/UserIdQuery'
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [for_ios, for_android]
+        - $ref: '_shared.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 用户的小说系列列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/UserNovelSeriesListResponse'
+        '404':
+          $ref: '_shared.yaml#/components/responses/NotFound'
+
+  /v1/watchlist/novel:
+    get:
+      operationId: watchListNovel
+      summary: 小说追更列表
+      tags: [watchlist]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 小说追更列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WatchlistResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/watchlist/novel/add:
+    post:
+      operationId: watchListNovelAdd
+      summary: 添加小说系列到追更列表
+      tags: [watchlist]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [series_id]
+              properties:
+                series_id:
+                  type: string
+                  description: 小说系列 ID（部分客户端以字符串传递）
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/watchlist/novel/delete:
+    post:
+      operationId: watchListNovelDelete
+      summary: 从追更列表移除小说系列
+      tags: [watchlist]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [series_id]
+              properties:
+                series_id:
+                  type: string
+                  description: 小说系列 ID（部分客户端以字符串传递）
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/watchlist/manga:
+    get:
+      operationId: watchListManga
+      summary: 漫画追更列表
+      tags: [watchlist]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 漫画追更列表
+          content:
+            application/json:
+              schema:
+                $ref: '_shared.yaml#/components/schemas/WatchlistResponse'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/watchlist/manga/add:
+    post:
+      operationId: watchListMangaAdd
+      summary: 添加漫画系列到追更列表
+      tags: [watchlist]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [series_id]
+              properties:
+                series_id:
+                  type: integer
+                  description: 漫画（插画）系列 ID
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+
+  /v1/watchlist/manga/delete:
+    post:
+      operationId: watchListMangaDelete
+      summary: 从追更列表移除漫画系列
+      tags: [watchlist]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/ClientTime'
+        - $ref: '_shared.yaml#/components/parameters/ClientHash'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [series_id]
+              properties:
+                series_id:
+                  type: integer
+                  description: 漫画（插画）系列 ID
+      responses:
+        '200':
+          $ref: '_shared.yaml#/components/responses/EmptyBody'
+        '401':
+          $ref: '_shared.yaml#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth2 Bearer 令牌，通过 oauth.secure.pixiv.net /auth/token 获取（见 auth.yaml）
